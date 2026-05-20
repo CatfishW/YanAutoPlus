@@ -1,0 +1,325 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+test('step definitions module exposes ordered normal and Plus step metadata', () => {
+  const source = fs.readFileSync('data/step-definitions.js', 'utf8');
+  const globalScope = {};
+
+  const api = new Function('self', `${source}; return self.MultiPageStepDefinitions;`)(globalScope);
+  const steps = api.getSteps();
+  const phoneSteps = api.getSteps({ signupMethod: 'phone' });
+  const phoneReloginSteps = api.getSteps({
+    signupMethod: 'phone',
+    phoneSignupReloginAfterBindEmailEnabled: true,
+  });
+  const plusSteps = api.getSteps({ plusModeEnabled: true });
+  const plusSub2ApiSessionSteps = api.getSteps({
+    plusModeEnabled: true,
+    panelMode: 'sub2api',
+    plusAccountAccessStrategy: 'sub2api_codex_session',
+  });
+  const plusCpaSessionSteps = api.getSteps({
+    plusModeEnabled: true,
+    panelMode: 'cpa',
+    plusAccountAccessStrategy: 'cpa_codex_session',
+  });
+  const plusPhoneSteps = api.getSteps({ plusModeEnabled: true, signupMethod: 'phone' });
+  const plusPhoneReloginSteps = api.getSteps({
+    plusModeEnabled: true,
+    signupMethod: 'phone',
+    phoneSignupReloginAfterBindEmailEnabled: true,
+  });
+  const goPaySteps = api.getSteps({ plusModeEnabled: true, plusPaymentMethod: 'gopay' });
+  const gpcSteps = api.getSteps({ plusModeEnabled: true, plusPaymentMethod: 'gpc-helper' });
+  const localCpaJsonNoRtSteps = api.getSteps({ panelMode: 'local-cpa-json-no-rt', plusModeEnabled: true });
+
+  assert.equal(Array.isArray(steps), true);
+  assert.equal(steps.length, 15);
+  assert.equal(steps.every((step) => step.flowId === 'openai'), true);
+  assert.deepStrictEqual(
+    steps.map((step) => step.order),
+    steps.map((step) => step.order).slice().sort((left, right) => left - right)
+  );
+  assert.deepStrictEqual(
+    steps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'wait-registration-success',
+      'plus-checkout-create',
+      'plus-checkout-billing',
+      'paypal-approve',
+      'plus-checkout-return',
+      'oauth-login',
+      'fetch-login-code',
+      'post-login-phone-verification',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.equal(steps[0].title, '打开 ChatGPT 官网');
+  assert.equal(steps[5].title, '等待注册成功');
+  assert.equal(steps[6].title, '创建 Plus Checkout');
+  assert.equal(phoneSteps[1].title, '注册并输入手机号');
+  assert.equal(phoneSteps[3].title, '获取手机验证码');
+  assert.deepStrictEqual(
+    phoneSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'wait-registration-success',
+      'plus-checkout-create',
+      'plus-checkout-billing',
+      'paypal-approve',
+      'plus-checkout-return',
+      'oauth-login',
+      'fetch-login-code',
+      'bind-email',
+      'fetch-bind-email-code',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.deepStrictEqual(
+    phoneReloginSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'wait-registration-success',
+      'plus-checkout-create',
+      'plus-checkout-billing',
+      'paypal-approve',
+      'plus-checkout-return',
+      'oauth-login',
+      'fetch-login-code',
+      'bind-email',
+      'fetch-bind-email-code',
+      'relogin-bound-email',
+      'fetch-bound-email-login-code',
+      'post-bound-email-phone-verification',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.equal(phoneReloginSteps.find((step) => step.key === 'relogin-bound-email')?.title, '绑定邮箱后刷新 OAuth 并登录（邮箱）');
+  assert.equal(phoneReloginSteps.find((step) => step.key === 'fetch-bind-email-code')?.title, '获取绑定邮箱验证码');
+
+  assert.deepStrictEqual(
+    plusSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'oauth-login',
+      'fetch-login-code',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.equal(plusSteps.some((step) => step.key === 'wait-registration-success'), false);
+  assert.equal(plusSteps.some((step) => step.key === 'fetch-login-code'), true);
+  assert.equal(plusSteps.find((step) => step.key === 'plus-checkout-create')?.title, '创建 Plus Checkout');
+  assert.deepStrictEqual(
+    plusSub2ApiSessionSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'sub2api-session-import',
+    ]
+  );
+  assert.equal(plusSub2ApiSessionSteps.find((step) => step.key === 'sub2api-session-import')?.title, '导入当前 ChatGPT 会话到 SUB2API');
+  assert.deepStrictEqual(
+    plusCpaSessionSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'cpa-session-import',
+    ]
+  );
+  assert.equal(plusCpaSessionSteps.find((step) => step.key === 'cpa-session-import')?.title, '导入当前 ChatGPT 会话到 CPA');
+  assert.equal(plusPhoneSteps[1].title, '注册并输入手机号');
+  assert.equal(plusPhoneSteps[3].title, '获取手机验证码');
+  assert.deepStrictEqual(
+    plusPhoneSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'oauth-login',
+      'fetch-login-code',
+      'bind-email',
+      'fetch-bind-email-code',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.deepStrictEqual(
+    plusPhoneReloginSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'oauth-login',
+      'fetch-login-code',
+      'bind-email',
+      'fetch-bind-email-code',
+      'relogin-bound-email',
+      'fetch-bound-email-login-code',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.equal(goPaySteps.some((step) => step.key === 'paypal-approve'), false);
+  assert.equal(api.getStepById(8, { plusModeEnabled: true, plusPaymentMethod: 'gopay' }), null);
+  assert.equal(api.getPlusPaymentStepTitle({ plusModeEnabled: true, plusPaymentMethod: 'gopay' }), '');
+  assert.deepStrictEqual(api.getStepIds({ plusModeEnabled: true }), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.equal(api.getLastStepId({ plusModeEnabled: true }), 10);
+  assert.deepStrictEqual(api.getStepIds({ plusModeEnabled: true, signupMethod: 'phone' }), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.equal(api.getLastStepId({ plusModeEnabled: true, signupMethod: 'phone' }), 12);
+  assert.deepStrictEqual(api.getStepIds({ plusModeEnabled: true, signupMethod: 'phone', phoneSignupReloginAfterBindEmailEnabled: true }), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  assert.equal(api.getLastStepId({ plusModeEnabled: true, signupMethod: 'phone', phoneSignupReloginAfterBindEmailEnabled: true }), 14);
+  assert.equal(api.hasFlow('openai'), true);
+  assert.equal(api.hasFlow('site-a'), false);
+  assert.deepStrictEqual(api.getRegisteredFlowIds(), ['openai']);
+  assert.deepStrictEqual(api.getSteps({ activeFlowId: 'site-a' }), []);
+  assert.equal(api.getStepById(2, { activeFlowId: 'site-a' }), null);
+  assert.equal(plusSteps[5].title, '创建 Plus Checkout');
+
+  assert.deepStrictEqual(
+    goPaySteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'gopay-subscription-confirm',
+      'oauth-login',
+      'fetch-login-code',
+      'post-login-phone-verification',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.deepStrictEqual(api.getStepIds({ plusModeEnabled: true, plusPaymentMethod: 'gopay' }), [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14]);
+  assert.equal(api.getLastStepId({ plusModeEnabled: true, plusPaymentMethod: 'gopay' }), 14);
+  assert.equal(goPaySteps[5].title, '打开 GoPay 订阅页');
+  assert.equal(goPaySteps[6].title, '等待 GoPay 订阅确认');
+
+  assert.deepStrictEqual(
+    gpcSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'plus-checkout-billing',
+      'oauth-login',
+      'fetch-login-code',
+      'post-login-phone-verification',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.deepStrictEqual(api.getStepIds({ plusModeEnabled: true, plusPaymentMethod: 'gpc-helper' }), [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14]);
+  assert.equal(api.getLastStepId({ plusModeEnabled: true, plusPaymentMethod: 'gpc-helper' }), 14);
+  assert.equal(gpcSteps[5].title, '创建 GPC 订单');
+  assert.equal(gpcSteps[6].title, '等待 GPC 任务完成');
+
+  assert.deepStrictEqual(
+    localCpaJsonNoRtSteps.map((step) => step.key),
+    [
+      'open-chatgpt',
+      'submit-signup-email',
+      'fill-password',
+      'fetch-signup-code',
+      'fill-profile',
+      'plus-checkout-create',
+      'local-cpa-json-export',
+    ]
+  );
+  assert.equal(localCpaJsonNoRtSteps.some((step) => step.key === 'wait-registration-success'), false);
+  assert.equal(localCpaJsonNoRtSteps[5].title, '创建 Plus Checkout');
+  assert.equal(localCpaJsonNoRtSteps[6].title, '导出本地CPA JSON');
+  assert.deepStrictEqual(api.getStepIds({ panelMode: 'local-cpa-json-no-rt', plusModeEnabled: true }), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(api.getLastStepId({ panelMode: 'local-cpa-json-no-rt', plusModeEnabled: true }), 7);
+});
+
+test('sidepanel html loads shared step definitions before sidepanel bootstrap', () => {
+  const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
+  const definitionsIndex = html.indexOf('<script src="../data/step-definitions.js"></script>');
+  const sidepanelIndex = html.indexOf('<script src="sidepanel.js"></script>');
+
+  assert.notEqual(definitionsIndex, -1);
+  assert.notEqual(sidepanelIndex, -1);
+  assert.ok(definitionsIndex < sidepanelIndex);
+});
+
+test('sidepanel html exposes Plus mode, PayPal, and GoPay settings', () => {
+  const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
+  assert.match(html, /<option value="local-cpa-json" selected>本地CPA JSON<\/option>/);
+  assert.doesNotMatch(html, /<option value="local-cpa-json-no-rt">/);
+  assert.match(html, /id="select-account-access-strategy"/);
+  assert.match(html, /<option value="oauth" selected>Oauth<\/option>/);
+  assert.match(html, /<option value="session_json">SESSION JSON导入<\/option>/);
+  assert.match(html, /id="row-export-current-session-json"/);
+  assert.match(html, /id="btn-export-current-session-cpa-json"/);
+  assert.match(html, /id="btn-export-current-session-sub2-json"/);
+  assert.ok(html.indexOf('row-export-current-session-json') < html.indexOf('row-custom-password'));
+  assert.match(html, /id="input-plus-mode-enabled"/);
+  assert.match(html, /id="select-plus-payment-method"/);
+  assert.match(html, /id="select-paypal-account"/);
+  assert.match(html, /id="btn-add-paypal-account"/);
+  assert.match(html, /id="input-gopay-phone"/);
+  assert.match(html, /id="input-gopay-otp"/);
+  assert.match(html, /id="input-gopay-pin"/);
+  assert.match(html, /<option value="gpc-helper">GPC<\/option>/);
+  assert.match(html, /id="btn-gpc-card-key-purchase"/);
+  assert.match(html, />服务说明</);
+  assert.match(html, /GPC API/);
+  assert.match(html, /id="input-gpc-helper-api"/);
+  assert.match(html, /id="btn-gpc-helper-convert-api-key"/);
+  assert.match(html, />填写说明</);
+  assert.match(html, /GPC API Key/);
+  assert.match(html, /id="input-gpc-helper-card-key"/);
+  assert.match(html, /GPC 模式/);
+  assert.match(html, /id="select-gpc-helper-phone-mode"/);
+  assert.match(html, /<option value="auto">自动模式<\/option>/);
+  assert.match(html, /id="btn-gpc-helper-balance"/);
+  assert.match(html, /id="input-gpc-helper-phone"/);
+  assert.match(html, /id="select-gpc-helper-otp-channel"/);
+  assert.match(html, /id="input-gpc-helper-local-sms-enabled"/);
+  assert.match(html, /id="input-gpc-helper-local-sms-url"/);
+  assert.match(html, /id="input-gpc-helper-pin"/);
+  assert.match(html, /id="shared-form-modal"/);
+});
