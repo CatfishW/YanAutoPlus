@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YanAutoPlus 0.1.2</title>
+  <title>YanAutoPlus 0.1.3</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -25,7 +25,7 @@
       <div class="header-version-block">
         <div class="header-version-main">
           <button id="extension-update-status" class="header-version-title header-version-link" type="button"
-          aria-label="打开 GitHub Releases 页面" title="打开 GitHub Releases 页面">YanAutoPlus 0.1.2</button>
+          aria-label="打开 GitHub Releases 页面" title="打开 GitHub Releases 页面">YanAutoPlus 0.1.3</button>
           <button id="btn-release-log" class="header-link-btn" type="button" hidden>更新日志</button>
         </div>
         <span id="extension-version-meta" class="header-version-meta" hidden></span>
@@ -138,7 +138,7 @@
       <div class="data-row" id="row-local-cpa-json-plugin-dir" style="display:none;">
         <span class="data-label">插件目录</span>
         <input type="text" id="input-local-cpa-json-plugin-dir" class="data-input"
-          placeholder="例如 C:\\your-plugin-folder" />
+          placeholder="解压后浏览器插件所在的目录" />
       </div>
       <div class="data-row" id="row-local-cpa-json-advanced-toggle" style="display:none;">
         <span class="data-label">高级</span>
@@ -338,6 +338,37 @@
         <input type="text" id="input-plus-checkout-conversion-proxy" class="data-input mono"
           placeholder="http://127.0.0.1:7890 或 socks5h://user:pass@host:port"
           title="仅在第 6 步创建 checkout 并跳转 pay.openai.com / Stripe hosted checkout 时临时生效；留空则沿用当前网络环境" />
+      </div>
+      <div class="data-row" id="row-plus-checkout-conversion-proxy-test" style="display:none;">
+        <span class="data-label" aria-hidden="true"></span>
+        <div class="data-inline data-value-actions plus-checkout-conversion-proxy-test-inline">
+          <button id="btn-plus-checkout-conversion-proxy-test" class="btn btn-outline btn-sm data-inline-btn" type="button">测试代理</button>
+          <label class="toggle-switch" for="input-plus-checkout-cloud-conversion-enabled"
+            title="启用后由云端服务接收 accessToken 并生成支付链接；本地支付转换代理将自动停用">
+            <input type="checkbox" id="input-plus-checkout-cloud-conversion-enabled" />
+            <span class="toggle-switch-track" aria-hidden="true">
+              <span class="toggle-switch-thumb"></span>
+            </span>
+          </label>
+          <span class="setting-caption">云端支付转换</span>
+          <span id="display-plus-checkout-conversion-proxy-test-result" class="data-value mono plus-checkout-conversion-proxy-test-result">未测试</span>
+        </div>
+      </div>
+      <div class="data-row" id="row-plus-checkout-cloud-conversion-api-url" style="display:none;">
+        <span class="data-label">云端接口</span>
+        <input type="text" id="input-plus-checkout-cloud-conversion-api-url" class="data-input mono"
+          placeholder="https://gujumpgate.zg.fyi/api/checkout"
+          title="启用云端支付转换时用于生成 PayPal hosted checkout 链接的接口；留空使用内置接口" />
+      </div>
+      <div class="data-row" id="row-plus-checkout-cloud-conversion-api-key" style="display:none;">
+        <span class="data-label">云端密钥</span>
+        <div class="input-with-icon">
+          <input type="password" id="input-plus-checkout-cloud-conversion-api-key" class="data-input data-input-with-icon mono"
+            placeholder="留空使用内置密钥" />
+          <button id="btn-toggle-plus-checkout-cloud-conversion-api-key" class="input-icon-btn" type="button"
+            data-password-toggle="input-plus-checkout-cloud-conversion-api-key" data-show-label="显示云端密钥"
+            data-hide-label="隐藏云端密钥" aria-label="显示云端密钥" title="显示云端密钥"></button>
+        </div>
       </div>
       <div class="data-row" id="row-hosted-checkout-verification-url" style="display:none;">
         <span class="data-label">验证码接口</span>

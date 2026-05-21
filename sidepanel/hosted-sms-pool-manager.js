@@ -331,9 +331,6 @@
       setLoading(true, '正在更新 Hosted 号池...');
       state.setText?.(nextText);
       state.setUsage?.(nextUsage);
-      if (!nextText) {
-        actions.clearFallback?.();
-      }
       render(nextEntries);
       try {
         await actions.persistPool?.();

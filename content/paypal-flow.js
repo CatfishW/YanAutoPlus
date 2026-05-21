@@ -3,7 +3,6 @@
 console.log('[MultiPage:paypal-flow] Content script loaded on', location.href);
 
 const PAYPAL_FLOW_LISTENER_SENTINEL = 'data-multipage-paypal-flow-listener';
-const PAYPAL_HOSTED_DEFAULT_PHONE = '1234567890';
 const PAYPAL_HOSTED_STAGE_OUTSIDE = 'outside_paypal';
 const PAYPAL_HOSTED_STAGE_LOGIN = 'pay_login';
 const PAYPAL_HOSTED_STAGE_GUEST_CHECKOUT = 'guest_checkout';
@@ -585,7 +584,7 @@ async function fillHostedGuestCheckout(payload = {}) {
 
   const card = buildHostedVisaCard();
   const email = normalizeText(payload.email || buildHostedRandomEmail());
-  const phone = normalizeText(payload.phone || PAYPAL_HOSTED_DEFAULT_PHONE);
+  const phone = normalizeText(payload.phone || '');
   const password = String(payload.password || buildHostedRandomPassword());
   const firstName = normalizeText(payload.firstName || 'James');
   const lastName = normalizeText(payload.lastName || 'Smith');
@@ -594,8 +593,8 @@ async function fillHostedGuestCheckout(payload = {}) {
   const cardCvv = normalizeText(payload.cardCvv || card.cvv);
   const address = payload.address && typeof payload.address === 'object' ? payload.address : {};
 
-  if (!email || !password || !cardNumber || !cardExpiry || !cardCvv) {
-    throw new Error('PayPal hosted checkout 缺少卡支付所需资料。');
+  if (!email || !phone || !password || !cardNumber || !cardExpiry || !cardCvv) {
+    throw new Error('PayPal hosted checkout 缺少卡支付所需资料（请先填写 PayPal 电话(不带+1) 或导入 Hosted 接码池）。');
   }
 
   fillHostedInputById('email', email);
