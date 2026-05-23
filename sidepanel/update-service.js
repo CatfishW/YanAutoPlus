@@ -32,7 +32,7 @@
   }
 
   function stripVersionPrefix(version) {
-    return String(version || '').trim().replace(/^(?:yanautoplus|flowpilot|ultra|pro|v)\s*/i, '');
+    return String(version || '').trim().replace(/^(?:(?:yanautoplus|gujumpgate|flowpilot|ultra|pro)\s*v?|v)\s*/i, '');
   }
 
   function extractVersionCore(version) {

@@ -31,16 +31,21 @@
 ## 前提要求
 
 1. 1 个带 API、且能连续正常接收 PayPal 验证码的 US `+1` 接码手机号
-2. 1 个或 N 个支持 `IMAP` 和 `Graph` 的 Outlook 邮箱 或者 自建Cloudflare Temp Email(edu前缀，如edu.openai.com才有试用资格)
+2. 1 个或 N 个支持 `IMAP` 和 `Graph` 的 Outlook 邮箱，或者自建 Cloudflare Temp Email / Cloud Mail
 3. 1 个或 N 个支持 GPT 注册的 JP 代理，用于批量轮询
-4. 1 个相对干净、支持 PayPal 注册的 US 代理 (干净就不会跳PAYPAL的注册滑块，账单页面的Captcha扩展已经设置了自动屏蔽)
-5. 1 个支持分流的代理工具(推荐Mihomo)
+4. 1 个相对干净、支持 PayPal 注册的 US 代理
+5. 1 个支持分流的代理工具，推荐 Mihomo
+
+> [!NOTE]
+> 自建 Cloudflare Temp Email / Cloud Mail 需要使用 `edu` 前缀，例如 `edu.openai.com`，才有试用资格。
+>
+> PayPal 注册代理越干净，越不容易触发 PayPal 注册滑块。账单页面的 Captcha 扩展已经实现了自动屏蔽。
 
 ## 测试环境
 
 - 成功率：连续 10 次串行运行，注册并激活 Plus 100% 成功率
 - 浏览器：Chrome `148.0.7778.168`（64 位正式版），开启无痕模式
-- 网络环境：JP 万人骑代理轮询 + US 自建代理
+- 网络环境： US 自建代理 + 云端转换
 
 ## 过程中遇到任何卡死的问题都可以停止，然后点击流程的各个节点进行重试，也可以选在旁边的小按钮跳过某个节点
 
@@ -66,9 +71,10 @@
 
 ![启用扩展的无痕模式权限](docs/images/github-readme-1779193501755.webp)
 
-### 4. 配置代理分流
+### 4. 配置代理
 
-在代理工具中配置注册、登录、PayPal 和 Stripe 的分流规则。
+现在推荐且能走的路径是 **US注册** + **JP拿长链接** + **US付款**
+这条路径还是可以稳定出试用和正常激活PLUS的
 
 你可以使用 Mihomo 等支持分流的代理工具，有什么、会什么就用什么。
 
@@ -76,6 +82,14 @@
 
 
 以下演示使用的代理工具是 [ZeroOmega](https://chromewebstore.google.com/detail/pfnededegaaopdmhkdmcofjmoldfiped?utm_source=item-share-cb)，(麻烦)
+
+#### 方案一：使用云端转换 （推荐）
+
+直接开启代理工具的规则/全局 US代理，选择云端转换，即可开始使用
+
+#### 方案二：本地配置代理
+
+配置本地用于支付转换的代理，出口必须是 JP 代理。
 
 ![配置代理分流规则](docs/images/github-readme-1779192674770.webp)
 
