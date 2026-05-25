@@ -140,6 +140,8 @@ const PLUS_PAYMENT_METHOD_GPC_HELPER = 'gpc-helper';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+const DEFAULT_EDU_SUBTOKEN_MAIL_ACCOUNT_PREFIX = 'subtoken';
 const DEFAULT_FIVE_SIM_PRODUCT = 'openai';
 const DEFAULT_NEX_SMS_SERVICE_CODE = 'ot';
 const FIVE_SIM_COUNTRY_ID = 'vietnam';
@@ -178,6 +180,7 @@ const self = {
 const PERSISTED_SETTING_DEFAULTS = {
   autoStepDelaySeconds: null,
   hostedCheckoutVerificationPopupDelaySeconds: 20,
+  smsPoolReuseUsedNumbersEnabled: false,
   hotmailAliasEnabled: false,
   gopayHelperApiUrl: 'https://your-gpc-helper-domain.example',
   mailProvider: '163',
@@ -204,6 +207,13 @@ function normalizeCloudflareTempEmailBaseUrl(value) { return String(value || '')
 function normalizeCloudflareTempEmailReceiveMailbox(value) { return String(value || '').trim().toLowerCase(); }
 function normalizeCloudflareTempEmailDomain(value) { return String(value || '').trim(); }
 function normalizeCloudflareTempEmailDomains(value) { return Array.isArray(value) ? value : []; }
+function normalizeEduSubtokenMailBaseUrl(value) { return String(value || '').trim() || 'https://edu.subtoken.vip/mail/api'; }
+function normalizeEduSubtokenMailUsernamePart(value, fallback = '') { return String(value || fallback || '').trim().toLowerCase().replace(/@.*$/g, '').replace(/[^a-z0-9._-]/g, '').slice(0, 32); }
+function normalizeEduSubtokenMailNextNumber(value) { return Math.max(1, Math.floor(Number(value)) || 1); }
+function normalizeEduSubtokenMailNumberPadding(value) { return Math.min(Math.max(Math.floor(Number(value)) || 3, 0), 8); }
+function normalizeEduSubtokenMailAccountPassword(value) { return String(value || '').length >= 10 ? String(value || '') : ''; }
+function normalizeEduSubtokenMailCurrentAccount(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : null; }
+function normalizeEduSubtokenMailDomain(value) { return String(value || '').trim() || 'edu.subtoken.vip'; }
 function normalizeHotmailAccounts(value) { return Array.isArray(value) ? value : []; }
 function resolveLegacyAutoStepDelaySeconds(value) {
   return value && Object.prototype.hasOwnProperty.call(value, 'autoStepDelaySeconds')
@@ -224,8 +234,15 @@ return {
   assert.equal(api.normalizePersistentSettingValue('phoneSignupReloginAfterBindEmailEnabled', 0), false);
   assert.equal(api.normalizePersistentSettingValue('mailProvider', 'cloudflare-temp-email'), 'cloudflare-temp-email');
   assert.equal(api.normalizePersistentSettingValue('mailProvider', 'cloudmail'), 'cloudmail');
+  assert.equal(api.normalizePersistentSettingValue('mailProvider', 'edu-subtoken-mail-api'), 'edu-subtoken-mail-api');
   assert.equal(api.normalizePersistentSettingValue('mailProvider', 'hotmail-api'), 'hotmail-api');
   assert.equal(api.normalizePersistentSettingValue('mailProvider', '163'), 'hotmail-api');
+  assert.equal(api.normalizePersistentSettingValue('eduSubtokenMailAccountPrefix', ' SubToken! '), 'subtoken');
+  assert.equal(api.normalizePersistentSettingValue('eduSubtokenMailNextNumber', '12'), 12);
+  assert.equal(api.normalizePersistentSettingValue('eduSubtokenMailNumberPadding', '9'), 8);
+  assert.equal(api.normalizePersistentSettingValue('eduSubtokenMailAccountSuffix', ' JP! '), 'jp');
+  assert.equal(api.normalizePersistentSettingValue('eduSubtokenMailAccountPassword', 'short'), '');
+  assert.equal(api.normalizePersistentSettingValue('eduSubtokenMailAccountPassword', 'LongEnough123'), 'LongEnough123');
   assert.equal(api.normalizePersistentSettingValue('hotmailAliasEnabled', 0), false);
   assert.equal(api.normalizePersistentSettingValue('hotmailAliasEnabled', 1), true);
   assert.equal(api.normalizePersistentSettingValue('plusPaymentMethod', 'gopay'), 'gopay');
@@ -291,6 +308,8 @@ return {
   assert.equal(api.normalizePersistentSettingValue('smsPoolCountryId', ''), 'US');
   assert.equal(api.normalizePersistentSettingValue('smsPoolServiceId', ''), '671');
   assert.equal(api.normalizePersistentSettingValue('smsPoolPoolId', ''), '7');
+  assert.equal(api.normalizePersistentSettingValue('smsPoolReuseUsedNumbersEnabled', false), false);
+  assert.equal(api.normalizePersistentSettingValue('smsPoolReuseUsedNumbersEnabled', true), true);
   assert.equal(api.normalizePersistentSettingValue('phoneSmsReuseEnabled', false), false);
   assert.equal(api.normalizePersistentSettingValue('phoneSmsReuseEnabled', true), true);
   assert.equal(api.normalizePersistentSettingValue('fiveSimApiKey', ' demo-five '), ' demo-five ');
@@ -421,6 +440,10 @@ return {
   });
   assert.equal(conflictingReusePayload.phoneSmsReuseEnabled, true);
   assert.equal(conflictingReusePayload.heroSmsReuseEnabled, true);
+  const smsPoolReuseUsedNumbersPayload = api.buildPersistentSettingsPayload({
+    smsPoolReuseUsedNumbersEnabled: true,
+  });
+  assert.equal(smsPoolReuseUsedNumbersPayload.smsPoolReuseUsedNumbersEnabled, true);
   const newReusePayload = api.buildPersistentSettingsPayload({
     phoneSmsReuseEnabled: false,
     heroSmsReuseEnabled: true,

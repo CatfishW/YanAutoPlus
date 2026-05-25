@@ -319,6 +319,18 @@ const inputCloudMailAdminEmail = document.getElementById('input-cloud-mail-admin
 const inputCloudMailAdminPassword = document.getElementById('input-cloud-mail-admin-password');
 const inputCloudMailReceiveMailbox = document.getElementById('input-cloud-mail-receive-mailbox');
 const inputCloudMailDomain = document.getElementById('input-cloud-mail-domain');
+const eduSubtokenMailSection = document.getElementById('edu-subtoken-mail-section');
+const rowEduSubtokenMailBaseUrl = document.getElementById('row-edu-subtoken-mail-base-url');
+const rowEduSubtokenMailAccountPattern = document.getElementById('row-edu-subtoken-mail-account-pattern');
+const rowEduSubtokenMailAccountPassword = document.getElementById('row-edu-subtoken-mail-account-password');
+const rowEduSubtokenMailCurrentAccount = document.getElementById('row-edu-subtoken-mail-current-account');
+const inputEduSubtokenMailBaseUrl = document.getElementById('input-edu-subtoken-mail-base-url');
+const inputEduSubtokenMailAccountPrefix = document.getElementById('input-edu-subtoken-mail-account-prefix');
+const inputEduSubtokenMailNextNumber = document.getElementById('input-edu-subtoken-mail-next-number');
+const inputEduSubtokenMailNumberPadding = document.getElementById('input-edu-subtoken-mail-number-padding');
+const inputEduSubtokenMailAccountSuffix = document.getElementById('input-edu-subtoken-mail-account-suffix');
+const inputEduSubtokenMailAccountPassword = document.getElementById('input-edu-subtoken-mail-account-password');
+const displayEduSubtokenMailCurrentAccount = document.getElementById('display-edu-subtoken-mail-current-account');
 const hotmailSection = document.getElementById('hotmail-section');
 const mail2925Section = document.getElementById('mail2925-section');
 const luckmailSection = document.getElementById('luckmail-section');
@@ -460,6 +472,7 @@ const rowSmsPoolCountry = document.getElementById('row-sms-pool-country');
 const rowSmsPoolCountryFallback = document.getElementById('row-sms-pool-country-fallback');
 const rowSmsPoolService = document.getElementById('row-sms-pool-service');
 const rowSmsPoolPool = document.getElementById('row-sms-pool-pool');
+const rowSmsPoolReuseUsedNumbersEnabled = document.getElementById('row-sms-pool-reuse-used-numbers-enabled');
 const rowFiveSimApiKey = document.getElementById('row-five-sim-api-key');
 const rowFiveSimCountry = document.getElementById('row-five-sim-country');
 const rowFiveSimCountryFallback = document.getElementById('row-five-sim-country-fallback');
@@ -491,6 +504,7 @@ const inputSmsPoolApiKey = document.getElementById('input-sms-pool-api-key');
 const btnToggleSmsPoolApiKey = document.getElementById('btn-toggle-sms-pool-api-key');
 const inputSmsPoolService = document.getElementById('input-sms-pool-service');
 const inputSmsPoolPool = document.getElementById('input-sms-pool-pool');
+const inputSmsPoolReuseUsedNumbersEnabled = document.getElementById('input-sms-pool-reuse-used-numbers-enabled');
 const inputFiveSimApiKey = document.getElementById('input-five-sim-api-key');
 const btnToggleFiveSimApiKey = document.getElementById('btn-toggle-five-sim-api-key');
 const inputFiveSimOperator = document.getElementById('input-five-sim-operator');
@@ -716,8 +730,8 @@ function getChromeRuntimeManifest() {
     return chrome.runtime.getManifest();
   }
   return {
-    version_name: 'YanAutoPlus local preview',
-    version: '0.0.0',
+    version_name: 'YanAutoPlus 0.1.4',
+    version: '0.1.4',
   };
 }
 
@@ -737,6 +751,7 @@ function buildLocalSidepanelPreviewState() {
     smsPoolServiceLabel: DEFAULT_SMS_POOL_SERVICE_LABEL,
     smsPoolPoolId: DEFAULT_SMS_POOL_POOL_ID,
     smsPoolPoolLabel: DEFAULT_SMS_POOL_POOL_LABEL,
+    smsPoolReuseUsedNumbersEnabled: false,
   };
 }
 
@@ -1171,6 +1186,8 @@ const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+const EDU_SUBTOKEN_MAIL_GENERATOR = 'edu-subtoken-mail-api';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const DEFAULT_LUCKMAIL_BASE_URL = 'https://mails.luckyous.com';
 const DEFAULT_LUCKMAIL_EMAIL_TYPE = 'ms_graph';
@@ -3210,6 +3227,9 @@ function normalizeSupportedMailProvider(value = '') {
   if (normalized === CLOUD_MAIL_PROVIDER) {
     return CLOUD_MAIL_PROVIDER;
   }
+  if (normalized === EDU_SUBTOKEN_MAIL_PROVIDER) {
+    return EDU_SUBTOKEN_MAIL_PROVIDER;
+  }
   return HOTMAIL_PROVIDER;
 }
 
@@ -3582,6 +3602,49 @@ function normalizeCloudMailDomainValue(value = '') {
   return normalizeCloudflareDomainValue(value);
 }
 
+function normalizeEduSubtokenMailBaseUrlValue(value = '') {
+  return window.EduSubtokenMailUtils?.normalizeEduSubtokenMailBaseUrl
+    ? window.EduSubtokenMailUtils.normalizeEduSubtokenMailBaseUrl(value)
+    : (String(value || '').trim() || 'https://edu.subtoken.vip/mail/api').replace(/\/+$/g, '');
+}
+
+function normalizeEduSubtokenMailReceiveMailboxValue(value = '') {
+  return window.EduSubtokenMailUtils?.normalizeEduSubtokenMailReceiveMailbox
+    ? window.EduSubtokenMailUtils.normalizeEduSubtokenMailReceiveMailbox(value)
+    : String(value || '').trim().toLowerCase();
+}
+
+function normalizeEduSubtokenMailUsernamePartValue(value = '', fallback = '') {
+  return window.EduSubtokenMailUtils?.normalizeEduSubtokenMailUsernamePart
+    ? window.EduSubtokenMailUtils.normalizeEduSubtokenMailUsernamePart(value, fallback)
+    : (String(value || fallback || '').trim().toLowerCase().replace(/@.*$/g, '').replace(/[^a-z0-9._-]/g, '').slice(0, 32));
+}
+
+function normalizeEduSubtokenMailNextNumberValue(value = 1) {
+  return window.EduSubtokenMailUtils?.normalizeEduSubtokenMailNextNumber
+    ? window.EduSubtokenMailUtils.normalizeEduSubtokenMailNextNumber(value)
+    : (Math.max(1, Math.floor(Number(value)) || 1));
+}
+
+function normalizeEduSubtokenMailNumberPaddingValue(value = 3) {
+  return window.EduSubtokenMailUtils?.normalizeEduSubtokenMailNumberPadding
+    ? window.EduSubtokenMailUtils.normalizeEduSubtokenMailNumberPadding(value)
+    : Math.min(Math.max(Math.floor(Number(value)) || 3, 0), 8);
+}
+
+function normalizeEduSubtokenMailAccountPasswordValue(value = '') {
+  return window.EduSubtokenMailUtils?.normalizeEduSubtokenMailAccountPassword
+    ? window.EduSubtokenMailUtils.normalizeEduSubtokenMailAccountPassword(value)
+    : (String(value || '').length >= 10 ? String(value || '') : '');
+}
+
+function formatEduSubtokenMailCurrentAccount(value = {}) {
+  const account = window.EduSubtokenMailUtils?.normalizeEduSubtokenMailCurrentAccount
+    ? window.EduSubtokenMailUtils.normalizeEduSubtokenMailCurrentAccount(value)
+    : value;
+  return account?.email || '未创建';
+}
+
 function getCloudflareDomainsFromState() {
   const domains = normalizeCloudflareDomains(latestState?.cloudflareDomains || []);
   const activeDomain = normalizeCloudflareDomainValue(latestState?.cloudflareDomain || '');
@@ -3669,6 +3732,30 @@ function applyCloudMailSettingsState(state = {}) {
   }
   if (inputCloudMailDomain) {
     inputCloudMailDomain.value = state?.cloudMailDomain || '';
+  }
+}
+
+function applyEduSubtokenMailSettingsState(state = {}) {
+  if (inputEduSubtokenMailBaseUrl) {
+    inputEduSubtokenMailBaseUrl.value = normalizeEduSubtokenMailBaseUrlValue(state?.eduSubtokenMailBaseUrl || '');
+  }
+  if (inputEduSubtokenMailAccountPrefix) {
+    inputEduSubtokenMailAccountPrefix.value = normalizeEduSubtokenMailUsernamePartValue(state?.eduSubtokenMailAccountPrefix || '', 'subtoken');
+  }
+  if (inputEduSubtokenMailNextNumber) {
+    inputEduSubtokenMailNextNumber.value = String(normalizeEduSubtokenMailNextNumberValue(state?.eduSubtokenMailNextNumber || 1));
+  }
+  if (inputEduSubtokenMailNumberPadding) {
+    inputEduSubtokenMailNumberPadding.value = String(normalizeEduSubtokenMailNumberPaddingValue(state?.eduSubtokenMailNumberPadding ?? 3));
+  }
+  if (inputEduSubtokenMailAccountSuffix) {
+    inputEduSubtokenMailAccountSuffix.value = normalizeEduSubtokenMailUsernamePartValue(state?.eduSubtokenMailAccountSuffix || '', '');
+  }
+  if (inputEduSubtokenMailAccountPassword) {
+    inputEduSubtokenMailAccountPassword.value = state?.eduSubtokenMailAccountPassword || '';
+  }
+  if (displayEduSubtokenMailCurrentAccount) {
+    displayEduSubtokenMailCurrentAccount.textContent = formatEduSubtokenMailCurrentAccount(state?.eduSubtokenMailCurrentAccount);
   }
 }
 
@@ -4138,6 +4225,9 @@ function collectSettingsPayload() {
   const smsPoolPoolValue = typeof inputSmsPoolPool !== 'undefined' && inputSmsPoolPool
     ? String(inputSmsPoolPool.value || latestState?.smsPoolPoolId || defaultSmsPoolPoolId).trim() || defaultSmsPoolPoolId
     : String(latestState?.smsPoolPoolId || defaultSmsPoolPoolId);
+  const smsPoolReuseUsedNumbersEnabledValue = typeof inputSmsPoolReuseUsedNumbersEnabled !== 'undefined' && inputSmsPoolReuseUsedNumbersEnabled
+    ? Boolean(inputSmsPoolReuseUsedNumbersEnabled.checked)
+    : Boolean(latestState?.smsPoolReuseUsedNumbersEnabled);
   const fiveSimProductValue = typeof inputFiveSimProduct !== 'undefined' && inputFiveSimProduct
     ? normalizeFiveSimProductForPayload(inputFiveSimProduct.value || latestState?.fiveSimProduct)
     : normalizeFiveSimProductForPayload(latestState?.fiveSimProduct || defaultFiveSimProduct);
@@ -4577,6 +4667,12 @@ function collectSettingsPayload() {
     cloudMailAdminPassword: (typeof inputCloudMailAdminPassword !== 'undefined' && inputCloudMailAdminPassword) ? inputCloudMailAdminPassword.value : '',
     cloudMailReceiveMailbox: normalizeCloudMailReceiveMailboxInput((typeof inputCloudMailReceiveMailbox !== 'undefined' && inputCloudMailReceiveMailbox) ? inputCloudMailReceiveMailbox.value : ''),
     cloudMailDomain: normalizeCloudMailDomainInput((typeof inputCloudMailDomain !== 'undefined' && inputCloudMailDomain) ? inputCloudMailDomain.value : ''),
+    eduSubtokenMailBaseUrl: normalizeEduSubtokenMailBaseUrlValue(inputEduSubtokenMailBaseUrl?.value || ''),
+    eduSubtokenMailAccountPrefix: normalizeEduSubtokenMailUsernamePartValue(inputEduSubtokenMailAccountPrefix?.value || '', 'subtoken'),
+    eduSubtokenMailNextNumber: normalizeEduSubtokenMailNextNumberValue(inputEduSubtokenMailNextNumber?.value || 1),
+    eduSubtokenMailNumberPadding: normalizeEduSubtokenMailNumberPaddingValue(inputEduSubtokenMailNumberPadding?.value ?? 3),
+    eduSubtokenMailAccountSuffix: normalizeEduSubtokenMailUsernamePartValue(inputEduSubtokenMailAccountSuffix?.value || '', ''),
+    eduSubtokenMailAccountPassword: normalizeEduSubtokenMailAccountPasswordValue(inputEduSubtokenMailAccountPassword?.value || ''),
     autoRunSkipFailures: inputAutoSkipFailures.checked,
     autoRunRetryNonFreeTrial: typeof inputAutoRunRetryNonFreeTrial !== 'undefined' && inputAutoRunRetryNonFreeTrial
       ? Boolean(inputAutoRunRetryNonFreeTrial.checked)
@@ -4644,6 +4740,7 @@ function collectSettingsPayload() {
     smsPoolServiceId: String(latestState?.smsPoolServiceId || defaultSmsPoolServiceId),
     smsPoolPoolId: smsPoolPoolValue,
     smsPoolPoolLabel: String(latestState?.smsPoolPoolLabel || defaultSmsPoolPoolLabel),
+    smsPoolReuseUsedNumbersEnabled: smsPoolReuseUsedNumbersEnabledValue,
     heroSmsApiKey: heroSmsApiKeyValue,
     fiveSimApiKey: fiveSimApiKeyValue,
     fiveSimCountryOrder: fiveSimCountryOrderValue,
@@ -9154,6 +9251,7 @@ function updatePhoneVerificationSettingsUI() {
     typeof rowSmsPoolCountryFallback !== 'undefined' ? rowSmsPoolCountryFallback : null,
     typeof rowSmsPoolService !== 'undefined' ? rowSmsPoolService : null,
     typeof rowSmsPoolPool !== 'undefined' ? rowSmsPoolPool : null,
+    typeof rowSmsPoolReuseUsedNumbersEnabled !== 'undefined' ? rowSmsPoolReuseUsedNumbersEnabled : null,
     typeof rowHeroSmsCountry !== 'undefined' ? rowHeroSmsCountry : null,
     typeof rowHeroSmsCountryFallback !== 'undefined' ? rowHeroSmsCountryFallback : null,
     typeof rowHeroSmsAcquirePriority !== 'undefined' ? rowHeroSmsAcquirePriority : null,
@@ -9194,6 +9292,7 @@ function updatePhoneVerificationSettingsUI() {
   if (typeof rowSmsPoolCountryFallback !== 'undefined' && rowSmsPoolCountryFallback) rowSmsPoolCountryFallback.style.display = showSmsPoolConfig ? '' : 'none';
   if (typeof rowSmsPoolService !== 'undefined' && rowSmsPoolService) rowSmsPoolService.style.display = showSmsPoolConfig ? '' : 'none';
   if (typeof rowSmsPoolPool !== 'undefined' && rowSmsPoolPool) rowSmsPoolPool.style.display = showSmsPoolConfig ? '' : 'none';
+  if (typeof rowSmsPoolReuseUsedNumbersEnabled !== 'undefined' && rowSmsPoolReuseUsedNumbersEnabled) rowSmsPoolReuseUsedNumbersEnabled.style.display = showSmsPoolConfig ? '' : 'none';
   if (rowHeroSmsCountry) rowHeroSmsCountry.style.display = showProviderConfig && heroProvider ? '' : 'none';
   if (rowHeroSmsCountryFallback) rowHeroSmsCountryFallback.style.display = showProviderConfig && heroProvider ? '' : 'none';
   if (rowHeroSmsAcquirePriority) rowHeroSmsAcquirePriority.style.display = showProviderConfig && heroProvider ? '' : 'none';
@@ -9245,6 +9344,9 @@ function updatePhoneVerificationSettingsUI() {
   }
   phoneSignupReuseUiWasLocked = phoneSignupReuseLocked;
   const settingsLocked = isAutoRunLockedPhase() || isAutoRunScheduledPhase();
+  if (typeof inputSmsPoolReuseUsedNumbersEnabled !== 'undefined' && inputSmsPoolReuseUsedNumbersEnabled) {
+    inputSmsPoolReuseUsedNumbersEnabled.disabled = settingsLocked || !showSmsPoolConfig;
+  }
   if (typeof inputPhoneSignupReloginAfterBindEmail !== 'undefined' && inputPhoneSignupReloginAfterBindEmail) {
     inputPhoneSignupReloginAfterBindEmail.disabled = settingsLocked || !showPhoneSignupReloginAfterBindEmail;
   }
@@ -10641,6 +10743,8 @@ function applySettingsState(state) {
     const restoredEmailGenerator = String(state?.emailGenerator || '').trim().toLowerCase();
     if (restoredMailProvider === cloudflareTempEmailProvider) {
       selectEmailGenerator.value = 'cloudflare-temp-email';
+    } else if (restoredMailProvider === EDU_SUBTOKEN_MAIL_PROVIDER) {
+      selectEmailGenerator.value = EDU_SUBTOKEN_MAIL_GENERATOR;
     } else if (restoredMailProvider === 'hotmail-api') {
       selectEmailGenerator.value = 'duck';
     } else if (restoredMailProvider === gmailProvider) {
@@ -10657,6 +10761,8 @@ function applySettingsState(state) {
       selectEmailGenerator.value = 'cloudflare-temp-email';
     } else if (restoredEmailGenerator === 'cloudmail') {
       selectEmailGenerator.value = 'cloudmail';
+    } else if (restoredEmailGenerator === EDU_SUBTOKEN_MAIL_GENERATOR) {
+      selectEmailGenerator.value = EDU_SUBTOKEN_MAIL_GENERATOR;
     } else {
       selectEmailGenerator.value = 'duck';
     }
@@ -10722,6 +10828,9 @@ function applySettingsState(state) {
   applyCloudflareTempEmailSettingsState(state);
   if (typeof applyCloudMailSettingsState === 'function') {
     applyCloudMailSettingsState(state);
+  }
+  if (typeof applyEduSubtokenMailSettingsState === 'function') {
+    applyEduSubtokenMailSettingsState(state);
   }
   renderCloudflareDomainOptions(state?.cloudflareDomain || '');
   setCloudflareDomainEditMode(false, { clearInput: true });
@@ -10839,6 +10948,9 @@ function applySettingsState(state) {
   }
   if (typeof inputSmsPoolPool !== 'undefined' && inputSmsPoolPool) {
     inputSmsPoolPool.value = String(state?.smsPoolPoolId || DEFAULT_SMS_POOL_POOL_ID);
+  }
+  if (typeof inputSmsPoolReuseUsedNumbersEnabled !== 'undefined' && inputSmsPoolReuseUsedNumbersEnabled) {
+    inputSmsPoolReuseUsedNumbersEnabled.checked = Boolean(state?.smsPoolReuseUsedNumbersEnabled);
   }
   if (typeof inputFiveSimApiKey !== 'undefined' && inputFiveSimApiKey) {
     inputFiveSimApiKey.value = String(state?.fiveSimApiKey || '');
@@ -11570,6 +11682,7 @@ function getSelectedEmailGenerator() {
   if (generator === 'cloudflare') return 'cloudflare';
   if (generator === 'cloudflare-temp-email') return 'cloudflare-temp-email';
   if (generator === 'cloudmail') return 'cloudmail';
+  if (generator === EDU_SUBTOKEN_MAIL_GENERATOR) return EDU_SUBTOKEN_MAIL_GENERATOR;
   return 'duck';
 }
 
@@ -11623,6 +11736,14 @@ function getEmailGeneratorUiCopy() {
       placeholder: '点击生成 Cloud Mail 邮箱，或手动粘贴邮箱',
       successVerb: '生成',
       label: 'Cloud Mail',
+    };
+  }
+  if (getSelectedEmailGenerator() === EDU_SUBTOKEN_MAIL_GENERATOR) {
+    return {
+      buttonLabel: '生成',
+      placeholder: '点击创建 Edu Subtoken 邮箱账号，或手动粘贴邮箱',
+      successVerb: '生成',
+      label: 'Edu Subtoken Mail',
     };
   }
 
@@ -12022,6 +12143,7 @@ function updateMailProviderUI() {
   const useCustomEmail = isCustomMailProvider();
   const useCloudflareTempEmailProvider = selectMailProvider.value === 'cloudflare-temp-email';
   const useCloudMailProvider = selectMailProvider.value === 'cloudmail';
+  const useEduSubtokenMailProvider = selectMailProvider.value === EDU_SUBTOKEN_MAIL_PROVIDER;
   const gmailAliasGenerator = typeof GMAIL_ALIAS_GENERATOR === 'string'
     ? GMAIL_ALIAS_GENERATOR
     : 'gmail-alias';
@@ -12032,8 +12154,8 @@ function updateMailProviderUI() {
     ? new Set()
     : (useCloudflareTempEmailProvider
       ? new Set(['cloudflare-temp-email'])
-      : (useCloudMailProvider
-        ? new Set(['cloudmail'])
+      : (useCloudMailProvider || useEduSubtokenMailProvider
+        ? new Set([useCloudMailProvider ? 'cloudmail' : EDU_SUBTOKEN_MAIL_GENERATOR])
         : (useGmail ? new Set([gmailAliasGenerator, customEmailPoolGenerator]) : null)));
   Array.from(selectEmailGenerator?.options || []).forEach((option) => {
     if (!option) return;
@@ -12063,6 +12185,9 @@ function updateMailProviderUI() {
   if (useCloudMailProvider && String(selectEmailGenerator?.value || '').trim().toLowerCase() !== 'cloudmail') {
     selectEmailGenerator.value = 'cloudmail';
   }
+  if (useEduSubtokenMailProvider && String(selectEmailGenerator?.value || '').trim().toLowerCase() !== EDU_SUBTOKEN_MAIL_GENERATOR) {
+    selectEmailGenerator.value = EDU_SUBTOKEN_MAIL_GENERATOR;
+  }
   const useEmailGenerator = !useHotmail && !useLuckmail && !useCustomEmail && (!useGeneratedAlias || useGmail);
   const aliasUiCopy = useGeneratedAlias
     ? getManagedAliasProviderUiCopy(selectMailProvider.value, mail2925Mode)
@@ -12087,6 +12212,7 @@ function updateMailProviderUI() {
   const useIcloud = selectedGenerator === 'icloud';
   const useCloudflareTempEmailGenerator = selectedGenerator === 'cloudflare-temp-email';
   const useCloudMailGenerator = selectedGenerator === 'cloudmail';
+  const useEduSubtokenMailGenerator = selectedGenerator === EDU_SUBTOKEN_MAIL_GENERATOR;
   const showCloudflareDomain = useEmailGenerator && useCloudflare;
   const showCloudflareTempEmailSettings = useCloudflareTempEmailProvider || (useEmailGenerator && useCloudflareTempEmailGenerator);
   const showCloudflareTempEmailLookupMode = useCloudflareTempEmailProvider;
@@ -12103,6 +12229,7 @@ function updateMailProviderUI() {
   const showCloudMailSettings = useCloudMailProvider || (useEmailGenerator && useCloudMailGenerator);
   const showCloudMailReceiveMailbox = useCloudMailProvider && !useCloudMailGenerator;
   const showCloudMailDomain = useEmailGenerator && useCloudMailGenerator;
+  const showEduSubtokenMailSettings = useEduSubtokenMailProvider || (useEmailGenerator && useEduSubtokenMailGenerator);
   const selectedIcloudHost = typeof getSelectedIcloudHostPreference === 'function'
     ? getSelectedIcloudHostPreference()
     : (normalizeIcloudHostValue(icloudHostPreferenceValue || latestState?.icloudHostPreference || '')
@@ -12136,6 +12263,13 @@ function updateMailProviderUI() {
   if (typeof rowCloudMailAdminPassword !== 'undefined' && rowCloudMailAdminPassword) rowCloudMailAdminPassword.style.display = showCloudMailSettings ? '' : 'none';
   if (typeof rowCloudMailReceiveMailbox !== 'undefined' && rowCloudMailReceiveMailbox) rowCloudMailReceiveMailbox.style.display = showCloudMailReceiveMailbox ? '' : 'none';
   if (typeof rowCloudMailDomain !== 'undefined' && rowCloudMailDomain) rowCloudMailDomain.style.display = showCloudMailDomain ? '' : 'none';
+  if (typeof eduSubtokenMailSection !== 'undefined' && eduSubtokenMailSection) {
+    eduSubtokenMailSection.style.display = showEduSubtokenMailSettings ? '' : 'none';
+  }
+  if (typeof rowEduSubtokenMailBaseUrl !== 'undefined' && rowEduSubtokenMailBaseUrl) rowEduSubtokenMailBaseUrl.style.display = showEduSubtokenMailSettings ? '' : 'none';
+  if (typeof rowEduSubtokenMailAccountPattern !== 'undefined' && rowEduSubtokenMailAccountPattern) rowEduSubtokenMailAccountPattern.style.display = showEduSubtokenMailSettings ? '' : 'none';
+  if (typeof rowEduSubtokenMailAccountPassword !== 'undefined' && rowEduSubtokenMailAccountPassword) rowEduSubtokenMailAccountPassword.style.display = showEduSubtokenMailSettings ? '' : 'none';
+  if (typeof rowEduSubtokenMailCurrentAccount !== 'undefined' && rowEduSubtokenMailCurrentAccount) rowEduSubtokenMailCurrentAccount.style.display = showEduSubtokenMailSettings ? '' : 'none';
   if (icloudSection) {
     const showIcloudSection = (useEmailGenerator && useIcloud) || useIcloudProvider;
     icloudSection.style.display = showIcloudSection ? '' : 'none';
@@ -12203,6 +12337,7 @@ function updateMailProviderUI() {
     || useCustomEmail
     || useCloudflareTempEmailProvider
     || useCloudMailProvider
+    || useEduSubtokenMailProvider
     || (useGeneratedAlias && !useGmail);
   if (useGmail) {
     labelEmailPrefix.textContent = 'Gmail 原邮箱';
@@ -14664,6 +14799,46 @@ inputVpsPassword.addEventListener('blur', () => {
   });
 });
 
+[inputCloudMailBaseUrl, inputCloudMailAdminEmail, inputCloudMailAdminPassword, inputCloudMailReceiveMailbox, inputCloudMailDomain].forEach((input) => {
+  input?.addEventListener('input', () => {
+    markSettingsDirty(true);
+    scheduleSettingsAutoSave();
+  });
+  input?.addEventListener('blur', () => {
+    if (input === inputCloudMailBaseUrl) {
+      input.value = normalizeCloudMailBaseUrlValue(input.value);
+    } else if (input === inputCloudMailReceiveMailbox) {
+      input.value = normalizeCloudMailReceiveMailboxValue(input.value);
+    } else if (input === inputCloudMailDomain) {
+      input.value = normalizeCloudMailDomainValue(input.value);
+    }
+    saveSettings({ silent: true }).catch(() => { });
+  });
+});
+
+[inputEduSubtokenMailBaseUrl, inputEduSubtokenMailAccountPrefix, inputEduSubtokenMailNextNumber, inputEduSubtokenMailNumberPadding, inputEduSubtokenMailAccountSuffix, inputEduSubtokenMailAccountPassword].forEach((input) => {
+  input?.addEventListener('input', () => {
+    markSettingsDirty(true);
+    scheduleSettingsAutoSave();
+  });
+  input?.addEventListener('blur', () => {
+    if (input === inputEduSubtokenMailBaseUrl) {
+      input.value = normalizeEduSubtokenMailBaseUrlValue(input.value);
+    } else if (input === inputEduSubtokenMailAccountPrefix) {
+      input.value = normalizeEduSubtokenMailUsernamePartValue(input.value, 'subtoken');
+    } else if (input === inputEduSubtokenMailNextNumber) {
+      input.value = String(normalizeEduSubtokenMailNextNumberValue(input.value));
+    } else if (input === inputEduSubtokenMailNumberPadding) {
+      input.value = String(normalizeEduSubtokenMailNumberPaddingValue(input.value));
+    } else if (input === inputEduSubtokenMailAccountSuffix) {
+      input.value = normalizeEduSubtokenMailUsernamePartValue(input.value, '');
+    } else if (input === inputEduSubtokenMailAccountPassword) {
+      input.value = normalizeEduSubtokenMailAccountPasswordValue(input.value);
+    }
+    saveSettings({ silent: true }).catch(() => { });
+  });
+});
+
 selectLuckmailEmailType?.addEventListener('change', () => {
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
@@ -15861,6 +16036,10 @@ inputSmsPoolPool?.addEventListener('input', () => {
 inputSmsPoolPool?.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
+inputSmsPoolReuseUsedNumbersEnabled?.addEventListener('change', () => {
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
 btnSmsPoolCountryMenu?.addEventListener('click', () => {
   const nextOpen = btnSmsPoolCountryMenu.getAttribute('aria-expanded') !== 'true';
   setSmsPoolCountryMenuOpen(nextOpen);
@@ -15975,6 +16154,7 @@ async function switchPhoneSmsProvider(nextProvider) {
       .filter(Boolean);
     patch.smsPoolServiceLabel = String(inputSmsPoolService?.value || latestState?.smsPoolServiceLabel || DEFAULT_SMS_POOL_SERVICE_LABEL).trim() || DEFAULT_SMS_POOL_SERVICE_LABEL;
     patch.smsPoolPoolId = String(inputSmsPoolPool?.value || latestState?.smsPoolPoolId || DEFAULT_SMS_POOL_POOL_ID).trim() || DEFAULT_SMS_POOL_POOL_ID;
+    patch.smsPoolReuseUsedNumbersEnabled = Boolean(inputSmsPoolReuseUsedNumbersEnabled?.checked);
   } else if (previousProvider === PHONE_SMS_PROVIDER_FIVE_SIM) {
     patch.fiveSimApiKey = currentApiKey;
     patch.fiveSimMaxPrice = currentMaxPrice;
@@ -16014,6 +16194,9 @@ async function switchPhoneSmsProvider(nextProvider) {
   }
   if (typeof inputSmsPoolPool !== 'undefined' && inputSmsPoolPool) {
     inputSmsPoolPool.value = String(latestState?.smsPoolPoolId || DEFAULT_SMS_POOL_POOL_ID);
+  }
+  if (typeof inputSmsPoolReuseUsedNumbersEnabled !== 'undefined' && inputSmsPoolReuseUsedNumbersEnabled) {
+    inputSmsPoolReuseUsedNumbersEnabled.checked = Boolean(latestState?.smsPoolReuseUsedNumbersEnabled);
   }
   if (inputHeroSmsMaxPrice) {
     inputHeroSmsMaxPrice.value = normalizedNextProvider === PHONE_SMS_PROVIDER_FIVE_SIM
@@ -17376,6 +17559,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.cloudMailDomain !== undefined && inputCloudMailDomain) {
         inputCloudMailDomain.value = message.payload.cloudMailDomain || '';
       }
+      if (message.payload.eduSubtokenMailBaseUrl !== undefined && inputEduSubtokenMailBaseUrl) {
+        inputEduSubtokenMailBaseUrl.value = normalizeEduSubtokenMailBaseUrlValue(message.payload.eduSubtokenMailBaseUrl);
+      }
+      if (message.payload.eduSubtokenMailAccountPrefix !== undefined && inputEduSubtokenMailAccountPrefix) {
+        inputEduSubtokenMailAccountPrefix.value = normalizeEduSubtokenMailUsernamePartValue(message.payload.eduSubtokenMailAccountPrefix, 'subtoken');
+      }
+      if (message.payload.eduSubtokenMailNextNumber !== undefined && inputEduSubtokenMailNextNumber) {
+        inputEduSubtokenMailNextNumber.value = String(normalizeEduSubtokenMailNextNumberValue(message.payload.eduSubtokenMailNextNumber));
+      }
+      if (message.payload.eduSubtokenMailNumberPadding !== undefined && inputEduSubtokenMailNumberPadding) {
+        inputEduSubtokenMailNumberPadding.value = String(normalizeEduSubtokenMailNumberPaddingValue(message.payload.eduSubtokenMailNumberPadding));
+      }
+      if (message.payload.eduSubtokenMailAccountSuffix !== undefined && inputEduSubtokenMailAccountSuffix) {
+        inputEduSubtokenMailAccountSuffix.value = normalizeEduSubtokenMailUsernamePartValue(message.payload.eduSubtokenMailAccountSuffix, '');
+      }
+      if (message.payload.eduSubtokenMailAccountPassword !== undefined && inputEduSubtokenMailAccountPassword) {
+        inputEduSubtokenMailAccountPassword.value = message.payload.eduSubtokenMailAccountPassword || '';
+      }
+      if (message.payload.eduSubtokenMailCurrentAccount !== undefined && displayEduSubtokenMailCurrentAccount) {
+        displayEduSubtokenMailCurrentAccount.textContent = formatEduSubtokenMailCurrentAccount(message.payload.eduSubtokenMailCurrentAccount);
+      }
       if (message.payload.plusModeEnabled !== undefined && inputPlusModeEnabled) {
         inputPlusModeEnabled.checked = Boolean(message.payload.plusModeEnabled);
       }
@@ -17647,6 +17851,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.nexSmsServiceCode !== undefined && inputNexSmsServiceCode) {
         inputNexSmsServiceCode.value = normalizeNexSmsServiceCodeValue(message.payload.nexSmsServiceCode);
       }
+      if (message.payload.smsPoolApiKey !== undefined && inputSmsPoolApiKey) {
+        inputSmsPoolApiKey.value = String(message.payload.smsPoolApiKey || '');
+      }
+      if (message.payload.smsPoolServiceLabel !== undefined && inputSmsPoolService) {
+        inputSmsPoolService.value = String(message.payload.smsPoolServiceLabel || DEFAULT_SMS_POOL_SERVICE_LABEL);
+      }
+      if (message.payload.smsPoolPoolId !== undefined && inputSmsPoolPool) {
+        inputSmsPoolPool.value = String(message.payload.smsPoolPoolId || DEFAULT_SMS_POOL_POOL_ID);
+      }
+      if (message.payload.smsPoolReuseUsedNumbersEnabled !== undefined && inputSmsPoolReuseUsedNumbersEnabled) {
+        inputSmsPoolReuseUsedNumbersEnabled.checked = Boolean(message.payload.smsPoolReuseUsedNumbersEnabled);
+        updatePhoneVerificationSettingsUI();
+      }
       if (
         (message.payload.phoneSmsReuseEnabled !== undefined
           || message.payload.heroSmsReuseEnabled !== undefined)
@@ -17776,6 +17993,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               : (Array.isArray(latestState?.nexSmsCountryOrder) ? latestState.nexSmsCountryOrder : [])
           );
         }
+      } else if (
+        message.payload.smsPoolCountryId !== undefined
+        || message.payload.smsPoolCountryLabel !== undefined
+        || message.payload.smsPoolCountryFallback !== undefined
+        || message.payload.smsPoolCountryOrder !== undefined
+      ) {
+        const nextOrder = message.payload.smsPoolCountryOrder !== undefined
+          ? message.payload.smsPoolCountryOrder
+          : [
+            {
+              id: String(message.payload.smsPoolCountryId !== undefined ? message.payload.smsPoolCountryId : latestState?.smsPoolCountryId || DEFAULT_SMS_POOL_COUNTRY_ID).trim().toUpperCase(),
+              label: String(message.payload.smsPoolCountryLabel !== undefined ? message.payload.smsPoolCountryLabel : latestState?.smsPoolCountryLabel || DEFAULT_SMS_POOL_COUNTRY_LABEL).trim() || DEFAULT_SMS_POOL_COUNTRY_LABEL,
+            },
+            ...(
+              Array.isArray(message.payload.smsPoolCountryFallback !== undefined ? message.payload.smsPoolCountryFallback : latestState?.smsPoolCountryFallback)
+                ? (message.payload.smsPoolCountryFallback !== undefined ? message.payload.smsPoolCountryFallback : latestState?.smsPoolCountryFallback)
+                : []
+            ),
+          ];
+        applySmsPoolCountrySelection(nextOrder, { ensureDefault: true });
+        updateHeroSmsPlatformDisplay();
       } else if (
         message.payload.heroSmsCountryId !== undefined
         || message.payload.heroSmsCountryLabel !== undefined

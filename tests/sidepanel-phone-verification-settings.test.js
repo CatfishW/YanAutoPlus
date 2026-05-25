@@ -95,6 +95,8 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="input-sms-pool-service"[^>]*value="OpenAI \/ ChatGPT"/);
   assert.match(html, /id="row-sms-pool-pool"/);
   assert.match(html, /id="input-sms-pool-pool"[^>]*value="7"/);
+  assert.match(html, /id="row-sms-pool-reuse-used-numbers-enabled"/);
+  assert.match(html, /id="input-sms-pool-reuse-used-numbers-enabled"/);
   assert.match(html, /\.\.\/phone-sms\/providers\/sms-pool\.js/);
   assert.match(html, /id="row-hero-sms-platform"/);
   assert.match(html, /id="select-phone-sms-provider"/);
@@ -169,6 +171,13 @@ test('sidepanel css does not hard-hide phone verification settings card', () => 
     sidepanelCss,
     /#ip-proxy-section\s*,\s*#phone-verification-section\s*\{[^}]*display\s*:\s*none\s*!important/i
   );
+});
+
+test('sidepanel local preview fallback uses current YanAutoPlus version', () => {
+  assert.doesNotMatch(sidepanelSource, /version_name:\s*'YanAutoPlus local preview'/);
+  assert.doesNotMatch(sidepanelSource, /version:\s*'0\.0\.0'/);
+  assert.match(sidepanelSource, /version_name:\s*'YanAutoPlus 0\.1\.4'/);
+  assert.match(sidepanelSource, /version:\s*'0\.1\.4'/);
 });
 
 test('sidepanel source supports SMSPool sidebar visibility in local preview', () => {
@@ -676,6 +685,7 @@ const rowSmsPoolCountry = { style: { display: 'none' } };
 const rowSmsPoolCountryFallback = { style: { display: 'none' } };
 const rowSmsPoolService = { style: { display: 'none' } };
 const rowSmsPoolPool = { style: { display: 'none' } };
+const rowSmsPoolReuseUsedNumbersEnabled = { style: { display: 'none' } };
 const btnSmsPoolCountryMenu = { disabled: true };
 const btnSmsPoolCountryClear = { disabled: true };
 const rowHeroSmsPlatform = { style: { display: 'none' } };
@@ -710,6 +720,7 @@ const rowFreePhoneReuseAutoEnabled = createMockRow();
 const rowFreeReusablePhone = createMockRow();
 const heroSmsReuseRow = createMockRow();
 const inputHeroSmsReuseEnabled = { checked: true, disabled: false, closest: () => heroSmsReuseRow };
+const inputSmsPoolReuseUsedNumbersEnabled = { checked: true, disabled: false };
 const inputFreePhoneReuseEnabled = { checked: true, disabled: false };
 const inputFreePhoneReuseAutoEnabled = { checked: true, disabled: false };
 const selectHeroSmsPreferredActivation = { disabled: false };
@@ -1038,6 +1049,12 @@ const inputTempEmailAdminAuth = { value: '' };
 const inputTempEmailCustomAuth = { value: '' };
 const inputTempEmailReceiveMailbox = { value: '' };
 const inputTempEmailUseRandomSubdomain = { checked: false };
+const inputEduSubtokenMailBaseUrl = { value: '' };
+const inputEduSubtokenMailAccountPrefix = { value: 'subtoken' };
+const inputEduSubtokenMailNextNumber = { value: '1' };
+const inputEduSubtokenMailNumberPadding = { value: '3' };
+const inputEduSubtokenMailAccountSuffix = { value: '' };
+const inputEduSubtokenMailAccountPassword = { value: '' };
 const inputAutoSkipFailures = { checked: false };
 const inputAutoSkipFailuresThreadIntervalMinutes = { value: '0' };
 const inputAutoDelayEnabled = { checked: false };
@@ -1052,11 +1069,13 @@ const rowSmsPoolCountry = { style: { display: '' } };
 const rowSmsPoolCountryFallback = { style: { display: '' } };
 const rowSmsPoolService = { style: { display: '' } };
 const rowSmsPoolPool = { style: { display: '' } };
+const rowSmsPoolReuseUsedNumbersEnabled = { style: { display: '' } };
 const btnSmsPoolCountryMenu = { disabled: false, setAttribute() {}, getAttribute() { return 'false'; } };
 const btnSmsPoolCountryClear = { disabled: false };
 const inputSmsPoolApiKey = { value: 'pool-key' };
 const inputSmsPoolService = { value: 'OpenAI / ChatGPT' };
 const inputSmsPoolPool = { value: '7' };
+const inputSmsPoolReuseUsedNumbersEnabled = { checked: true };
 const inputVerificationResendCount = { value: '4' };
 const inputHeroSmsApiKey = { value: 'demo-key' };
 const inputFiveSimApiKey = { value: 'five-sim-key' };
@@ -1154,6 +1173,11 @@ function normalizeLuckmailBaseUrl(value) { return String(value || '').trim(); }
 function normalizeLuckmailEmailType(value) { return String(value || '').trim() || 'ms_graph'; }
 function normalizeCloudflareTempEmailBaseUrlValue(value) { return String(value || '').trim(); }
 function normalizeCloudflareTempEmailReceiveMailboxValue(value) { return String(value || '').trim(); }
+function normalizeEduSubtokenMailBaseUrlValue(value) { return String(value || '').trim() || 'https://edu.subtoken.vip/mail/api'; }
+function normalizeEduSubtokenMailUsernamePartValue(value, fallback = '') { return String(value || fallback || '').trim().toLowerCase().replace(/@.*$/g, '').replace(/[^a-z0-9._-]/g, '').slice(0, 32); }
+function normalizeEduSubtokenMailNextNumberValue(value) { return Math.max(1, Math.floor(Number(value)) || 1); }
+function normalizeEduSubtokenMailNumberPaddingValue(value) { return Math.min(Math.max(Math.floor(Number(value)) || 3, 0), 8); }
+function normalizeEduSubtokenMailAccountPasswordValue(value) { return String(value || '').length >= 10 ? String(value || '') : ''; }
 function normalizeAccountRunHistoryHelperBaseUrlValue(value) { return String(value || '').trim(); }
 function normalizePlusHostedCheckoutOauthDelaySeconds(value) { return Number(value) || 0; }
 function normalizeHostedCheckoutVerificationPopupDelaySeconds(value) { return Number(value) || 20; }
@@ -1229,6 +1253,7 @@ return { collectSettingsPayload };
   assert.deepStrictEqual(payload.nexSmsCountryOrder, [1]);
   assert.equal(payload.nexSmsServiceCode, 'ot');
   assert.equal(payload.phoneSmsReuseEnabled, false);
+  assert.equal(payload.smsPoolReuseUsedNumbersEnabled, true);
   assert.equal(payload.heroSmsReuseEnabled, false);
   assert.equal(payload.freePhoneReuseEnabled, false);
   assert.equal(payload.freePhoneReuseAutoEnabled, false);

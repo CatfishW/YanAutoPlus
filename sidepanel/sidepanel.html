@@ -569,6 +569,7 @@
             <option value="hotmail-api">Outlook/Hotmail 账号池</option>
             <option value="cloudflare-temp-email">Cloudflare Temp Email</option>
             <option value="cloudmail">Cloud Mail</option>
+            <option value="edu-subtoken-mail-api">Edu Subtoken Mail API</option>
           </select>
           <button id="btn-mail-login" class="btn btn-outline btn-sm data-inline-btn" type="button" disabled>登录</button>
         </div>
@@ -595,6 +596,7 @@
           <option value="icloud">iCloud 隐私邮箱</option>
           <option value="cloudflare-temp-email">Cloudflare Temp Email</option>
           <option value="cloudmail">Cloud Mail</option>
+          <option value="edu-subtoken-mail-api">Edu Subtoken Mail</option>
         </select>
       </div>
       <div class="data-row data-check-row" id="row-custom-email-pool" style="display:none;">
@@ -935,6 +937,59 @@
       <div class="data-row" id="row-cloud-mail-domain" style="display:none;">
         <span class="data-label">域名</span>
         <input type="text" id="input-cloud-mail-domain" class="data-input" placeholder="例如 mail.example.com" />
+      </div>
+    </div>
+    <div id="edu-subtoken-mail-section" class="data-card hotmail-card" style="display:none;">
+      <div class="section-mini-header">
+        <div class="section-mini-copy">
+          <span class="section-label">Edu Subtoken Mail API</span>
+          <span class="data-value">自动创建 edu.subtoken.vip 邮箱账号并轮询验证码</span>
+        </div>
+      </div>
+      <div class="data-row" id="row-edu-subtoken-mail-base-url" style="display:none;">
+        <span class="data-label">API 地址</span>
+        <input type="text" id="input-edu-subtoken-mail-base-url" class="data-input mono"
+          placeholder="https://edu.subtoken.vip/mail/api" />
+      </div>
+      <div class="data-row" id="row-edu-subtoken-mail-account-pattern" style="display:none;">
+        <span class="data-label">账号格式</span>
+        <div class="data-inline hero-sms-price-controls-grid">
+          <div class="hero-sms-price-control">
+            <span class="hero-sms-settings-caption">前缀</span>
+            <input type="text" id="input-edu-subtoken-mail-account-prefix" class="data-input mono"
+              placeholder="subtoken" />
+          </div>
+          <div class="hero-sms-price-control">
+            <span class="hero-sms-settings-caption">起始编号</span>
+            <input type="number" id="input-edu-subtoken-mail-next-number" class="data-input mono"
+              value="1" min="1" step="1" />
+          </div>
+          <div class="hero-sms-price-control">
+            <span class="hero-sms-settings-caption">补零位数</span>
+            <input type="number" id="input-edu-subtoken-mail-number-padding" class="data-input mono"
+              value="3" min="0" max="8" step="1" />
+          </div>
+          <div class="hero-sms-price-control">
+            <span class="hero-sms-settings-caption">后缀</span>
+            <input type="text" id="input-edu-subtoken-mail-account-suffix" class="data-input mono"
+              placeholder="可空，例如 us" />
+          </div>
+        </div>
+      </div>
+      <div class="data-row" id="row-edu-subtoken-mail-account-password" style="display:none;">
+        <span class="data-label">账号密码</span>
+        <div class="input-with-icon">
+          <input type="password" id="input-edu-subtoken-mail-account-password"
+            class="data-input data-input-with-icon mono" placeholder="留空则自动生成并复用" />
+          <button id="btn-toggle-edu-subtoken-mail-account-password" class="input-icon-btn" type="button"
+            data-password-toggle="input-edu-subtoken-mail-account-password" data-show-label="显示 Edu Subtoken 密码"
+            data-hide-label="隐藏 Edu Subtoken 密码" aria-label="显示 Edu Subtoken 密码"
+            title="显示 Edu Subtoken 密码"></button>
+        </div>
+      </div>
+      <div class="data-row" id="row-edu-subtoken-mail-current-account" style="display:none;">
+        <span class="data-label">当前账号</span>
+        <span id="display-edu-subtoken-mail-current-account" class="data-value mono">未创建</span>
       </div>
     </div>
     <div id="hotmail-section" class="data-card hotmail-card" style="display:none;">
@@ -1579,6 +1634,17 @@
               <input type="text" id="input-sms-pool-pool" class="data-input mono"
                 placeholder="7" value="7" />
             </div>
+            <div class="data-row" id="row-sms-pool-reuse-used-numbers-enabled" style="display:none;">
+              <span class="data-label">复用已用号码</span>
+              <label class="toggle-switch" for="input-sms-pool-reuse-used-numbers-enabled"
+                title="开启后优先从 SMSPool 历史订单重发短信；没有可用历史号码时再购买新号码">
+                <input type="checkbox" id="input-sms-pool-reuse-used-numbers-enabled" />
+                <span class="toggle-switch-track" aria-hidden="true">
+                  <span class="toggle-switch-thumb"></span>
+                </span>
+              </label>
+              <span class="data-value">优先 Resend 历史订单，再回退购买新号码</span>
+            </div>
             <div class="data-row" id="row-hero-sms-platform" style="display:none;">
               <span class="data-label">接码平台</span>
               <span id="display-hero-sms-platform" class="data-value mono">HeroSMS / OpenAI / Thailand</span>
@@ -1990,6 +2056,7 @@
   <script src="../phone-sms/providers/registry.js"></script>
   <script src="../icloud-utils.js"></script>
   <script src="../mail-provider-utils.js"></script>
+  <script src="../edu-subtoken-mail-utils.js"></script>
   <script src="../hotmail-utils.js"></script>
   <script src="../luckmail-utils.js"></script>
   <script src="../shared/flow-capabilities.js"></script>

@@ -8408,3 +8408,685 @@ test('phone verification helper routes 5sim reusable activation through reuse en
     ]
   );
 });
+
+test('phone verification helper routes SMSPool used number reuse through history resend endpoint', async () => {
+  const requests = [];
+  let currentState = {
+    phoneSmsProvider: 'smspool',
+    smsPoolApiKey: 'demo-smspool-key',
+    smsPoolCountryId: 'US',
+    smsPoolCountryLabel: 'United States',
+    smsPoolServiceId: '671',
+    smsPoolServiceLabel: 'OpenAI / ChatGPT',
+    smsPoolPoolId: '7',
+    smsPoolReuseUsedNumbersEnabled: true,
+    phoneSmsReuseEnabled: true,
+    verificationResendCount: 0,
+    phoneVerificationReplacementLimit: 2,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 1,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+
+  const smsPoolSource = fs.readFileSync('phone-sms/providers/sms-pool.js', 'utf8');
+  const smsPoolModule = new Function('self', `${smsPoolSource}; return self.PhoneSmsSmsPoolProvider;`)({});
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    createSmsPoolProvider: smsPoolModule.createProvider,
+    fetchImpl: async (url, options = {}) => {
+      const parsedUrl = new URL(url);
+      requests.push({ url: parsedUrl, options });
+      if (parsedUrl.pathname === '/request/history') {
+        assert.equal(options.body, 'key=demo-smspool-key&service=671&country=US&limit=50');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            requests: [{
+              order_code: 'pool-history-1',
+              phonenumber: '12025550123',
+              short_name: 'US',
+              country: 'United States',
+              service_id: '671',
+              service: 'OpenAI / ChatGPT',
+              status: 'completed',
+              resend: 1,
+            }],
+          }),
+        };
+      }
+      if (parsedUrl.pathname === '/sms/check_resend') {
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-history-1');
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      if (parsedUrl.pathname === '/sms/resend') {
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-history-1');
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      if (parsedUrl.pathname === '/sms/check') {
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-history-1');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ success: true, status: 'completed', sms: 'Your OpenAI code is 654321' }),
+        };
+      }
+      throw new Error(`Unexpected SMSPool path: ${parsedUrl.pathname}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        return { phoneVerificationPage: true, url: 'https://auth.openai.com/phone-verification' };
+      }
+      if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+        return { success: true, consentReady: true, url: 'https://auth.openai.com/authorize' };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.completePhoneVerificationFlow(1, {
+    addPhonePage: true,
+    phoneVerificationPage: false,
+    url: 'https://auth.openai.com/add-phone',
+  });
+
+  assert.deepStrictEqual(result, {
+    success: true,
+    consentReady: true,
+    url: 'https://auth.openai.com/authorize',
+  });
+  assert.equal(currentState.reusablePhoneActivation.provider, 'smspool');
+  assert.equal(currentState.reusablePhoneActivation.activationId, 'pool-history-1');
+  assert.equal(currentState.reusablePhoneActivation.phoneNumber, '+12025550123');
+  assert.equal(currentState.reusablePhoneActivation.successfulUses, 1);
+  assert.deepStrictEqual(
+    requests.map((entry) => entry.url.pathname),
+    [
+      '/request/history',
+      '/sms/check_resend',
+      '/sms/resend',
+      '/sms/check',
+    ]
+  );
+  assert.equal(requests.some((entry) => entry.url.pathname === '/purchase/sms'), false);
+});
+
+test('phone verification helper randomly prioritizes SMSPool 0.07 used numbers before other history orders', async () => {
+  const requests = [];
+  let currentState = {
+    phoneSmsProvider: 'smspool',
+    smsPoolApiKey: 'demo-smspool-key',
+    smsPoolCountryId: 'US',
+    smsPoolCountryLabel: 'United States',
+    smsPoolServiceId: '671',
+    smsPoolServiceLabel: 'OpenAI / ChatGPT',
+    smsPoolPoolId: '7',
+    smsPoolReuseUsedNumbersEnabled: true,
+    phoneSmsReuseEnabled: true,
+    verificationResendCount: 0,
+    phoneVerificationReplacementLimit: 2,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 1,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+
+  const smsPoolSource = fs.readFileSync('phone-sms/providers/sms-pool.js', 'utf8');
+  const smsPoolModule = new Function('self', `${smsPoolSource}; return self.PhoneSmsSmsPoolProvider;`)({});
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    createSmsPoolProvider: (deps = {}) => smsPoolModule.createProvider({
+      ...deps,
+      randomFn: () => 0.999,
+    }),
+    fetchImpl: async (url, options = {}) => {
+      const parsedUrl = new URL(url);
+      requests.push({ url: parsedUrl, options });
+      if (parsedUrl.pathname === '/request/history') {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            requests: [
+              {
+                order_code: 'pool-history-expensive',
+                phonenumber: '12025550001',
+                short_name: 'US',
+                country: 'United States',
+                service_id: '671',
+                service: 'OpenAI / ChatGPT',
+                status: 'completed',
+                resend: 1,
+                cost: '0.10',
+              },
+              {
+                order_code: 'pool-history-seven-a',
+                phonenumber: '12025550002',
+                short_name: 'US',
+                country: 'United States',
+                service_id: '671',
+                service: 'OpenAI / ChatGPT',
+                status: 'completed',
+                resend: 1,
+                cost: '$0.07',
+              },
+              {
+                order_code: 'pool-history-seven-b',
+                phonenumber: '12025550003',
+                short_name: 'US',
+                country: 'United States',
+                service_id: '671',
+                service: 'OpenAI / ChatGPT',
+                status: 'completed',
+                resend: 1,
+                cost: 0.07,
+              },
+            ],
+          }),
+        };
+      }
+      if (parsedUrl.pathname === '/sms/check_resend') {
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-history-seven-a');
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      if (parsedUrl.pathname === '/sms/resend') {
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-history-seven-a');
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      if (parsedUrl.pathname === '/sms/check') {
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-history-seven-a');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ success: true, status: 'completed', sms: 'Your OpenAI code is 246810' }),
+        };
+      }
+      throw new Error(`Unexpected SMSPool path: ${parsedUrl.pathname}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        return { phoneVerificationPage: true, url: 'https://auth.openai.com/phone-verification' };
+      }
+      if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+        return { success: true, consentReady: true, url: 'https://auth.openai.com/authorize' };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.completePhoneVerificationFlow(1, {
+    addPhonePage: true,
+    phoneVerificationPage: false,
+    url: 'https://auth.openai.com/add-phone',
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(currentState.reusablePhoneActivation.activationId, 'pool-history-seven-a');
+  assert.equal(currentState.reusablePhoneActivation.price, 0.07);
+  assert.deepStrictEqual(
+    requests
+      .filter((entry) => entry.url.pathname === '/sms/check_resend' || entry.url.pathname === '/sms/resend')
+      .map((entry) => entry.options.body),
+    [
+      'key=demo-smspool-key&orderid=pool-history-seven-a',
+      'key=demo-smspool-key&orderid=pool-history-seven-a',
+    ]
+  );
+});
+
+test('phone verification helper rotates SMSPool current number on provider error and blocks it from reuse', async () => {
+  const requests = [];
+  const submittedPhones = [];
+  let currentState = {
+    phoneSmsProvider: 'smspool',
+    smsPoolApiKey: 'demo-smspool-key',
+    smsPoolCountryId: 'US',
+    smsPoolCountryLabel: 'United States',
+    smsPoolServiceId: '671',
+    smsPoolServiceLabel: 'OpenAI / ChatGPT',
+    smsPoolPoolId: '7',
+    smsPoolReuseUsedNumbersEnabled: true,
+    phoneSmsReuseEnabled: true,
+    verificationResendCount: 0,
+    phoneVerificationReplacementLimit: 2,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 1,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+
+  const smsPoolSource = fs.readFileSync('phone-sms/providers/sms-pool.js', 'utf8');
+  const smsPoolModule = new Function('self', `${smsPoolSource}; return self.PhoneSmsSmsPoolProvider;`)({});
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    createSmsPoolProvider: (deps = {}) => smsPoolModule.createProvider({
+      ...deps,
+      randomFn: () => 0.999,
+    }),
+    fetchImpl: async (url, options = {}) => {
+      const parsedUrl = new URL(url);
+      requests.push({ url: parsedUrl, options });
+      if (parsedUrl.pathname === '/request/history') {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            requests: [
+              {
+                order_code: 'pool-history-bad',
+                phonenumber: '12025550111',
+                short_name: 'US',
+                country: 'United States',
+                service_id: '671',
+                service: 'OpenAI / ChatGPT',
+                status: 'completed',
+                resend: 1,
+                cost: '0.07',
+              },
+              {
+                order_code: 'pool-history-good',
+                phonenumber: '12025550222',
+                short_name: 'US',
+                country: 'United States',
+                service_id: '671',
+                service: 'OpenAI / ChatGPT',
+                status: 'completed',
+                resend: 1,
+                cost: '0.07',
+              },
+            ],
+          }),
+        };
+      }
+      if (parsedUrl.pathname === '/sms/check_resend' || parsedUrl.pathname === '/sms/resend') {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      if (parsedUrl.pathname === '/sms/check') {
+        if (options.body === 'key=demo-smspool-key&orderid=pool-history-bad') {
+          return {
+            ok: false,
+            status: 500,
+            text: async () => JSON.stringify({ error: 'temporary provider error' }),
+          };
+        }
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-history-good');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ success: true, status: 'completed', sms: 'Your OpenAI code is 135790' }),
+        };
+      }
+      if (parsedUrl.pathname === '/sms/cancel') {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      throw new Error(`Unexpected SMSPool path: ${parsedUrl.pathname}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    readAuthTabSnapshot: async () => ({
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    }),
+    navigateAuthTabToAddPhone: async () => ({
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    }),
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'READ_PHONE_PAGE_STATE') {
+        return {
+          addPhonePage: true,
+          phoneVerificationPage: false,
+          url: 'https://auth.openai.com/add-phone',
+        };
+      }
+      if (message.type === 'RETURN_TO_ADD_PHONE') {
+        return {
+          addPhonePage: true,
+          phoneVerificationPage: false,
+          url: 'https://auth.openai.com/add-phone',
+        };
+      }
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        submittedPhones.push(message.payload?.phoneNumber);
+        return { phoneVerificationPage: true, url: 'https://auth.openai.com/phone-verification' };
+      }
+      if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+        return { success: true, consentReady: true, url: 'https://auth.openai.com/authorize' };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.completePhoneVerificationFlow(1, {
+    addPhonePage: true,
+    phoneVerificationPage: false,
+    url: 'https://auth.openai.com/add-phone',
+  });
+
+  assert.equal(result.success, true);
+  assert.deepStrictEqual(submittedPhones, ['+12025550111', '+12025550222']);
+  assert.equal(currentState.reusablePhoneActivation.activationId, 'pool-history-good');
+  assert.equal(
+    requests.filter((entry) => entry.url.pathname === '/sms/check' && entry.options.body === 'key=demo-smspool-key&orderid=pool-history-bad').length,
+    1
+  );
+  assert.equal(
+    requests.filter((entry) => entry.url.pathname === '/sms/check_resend' && entry.options.body === 'key=demo-smspool-key&orderid=pool-history-bad').length,
+    1
+  );
+});
+
+test('phone verification helper rotates SMSPool current number when resend after invalid code fails', async () => {
+  const requests = [];
+  const submittedPhones = [];
+  let submitCodeCount = 0;
+  let badResendCount = 0;
+  let currentState = {
+    phoneSmsProvider: 'smspool',
+    smsPoolApiKey: 'demo-smspool-key',
+    smsPoolCountryId: 'US',
+    smsPoolCountryLabel: 'United States',
+    smsPoolServiceId: '671',
+    smsPoolServiceLabel: 'OpenAI / ChatGPT',
+    smsPoolPoolId: '7',
+    smsPoolReuseUsedNumbersEnabled: true,
+    phoneSmsReuseEnabled: true,
+    verificationResendCount: 1,
+    phoneVerificationReplacementLimit: 2,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 1,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+
+  const smsPoolSource = fs.readFileSync('phone-sms/providers/sms-pool.js', 'utf8');
+  const smsPoolModule = new Function('self', `${smsPoolSource}; return self.PhoneSmsSmsPoolProvider;`)({});
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    createSmsPoolProvider: (deps = {}) => smsPoolModule.createProvider({
+      ...deps,
+      randomFn: () => 0.999,
+    }),
+    fetchImpl: async (url, options = {}) => {
+      const parsedUrl = new URL(url);
+      const body = String(options.body || '');
+      requests.push({ url: parsedUrl, options });
+      if (parsedUrl.pathname === '/request/history') {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            requests: [
+              {
+                order_code: 'pool-history-bad-resend',
+                phonenumber: '12025550333',
+                short_name: 'US',
+                country: 'United States',
+                service_id: '671',
+                service: 'OpenAI / ChatGPT',
+                status: 'completed',
+                resend: 1,
+                cost: '0.07',
+              },
+              {
+                order_code: 'pool-history-good-resend',
+                phonenumber: '12025550444',
+                short_name: 'US',
+                country: 'United States',
+                service_id: '671',
+                service: 'OpenAI / ChatGPT',
+                status: 'completed',
+                resend: 1,
+                cost: '0.07',
+              },
+            ],
+          }),
+        };
+      }
+      if (parsedUrl.pathname === '/sms/check_resend') {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      if (parsedUrl.pathname === '/sms/resend') {
+        if (body === 'key=demo-smspool-key&orderid=pool-history-bad-resend') {
+          badResendCount += 1;
+          if (badResendCount > 1) {
+            return {
+              ok: false,
+              status: 500,
+              text: async () => JSON.stringify({ error: 'temporary provider resend error' }),
+            };
+          }
+        }
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      if (parsedUrl.pathname === '/sms/check') {
+        if (body === 'key=demo-smspool-key&orderid=pool-history-bad-resend') {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ success: true, status: 'completed', sms: 'Your OpenAI code is 112233' }),
+          };
+        }
+        assert.equal(body, 'key=demo-smspool-key&orderid=pool-history-good-resend');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ success: true, status: 'completed', sms: 'Your OpenAI code is 445566' }),
+        };
+      }
+      if (parsedUrl.pathname === '/sms/cancel') {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true }) };
+      }
+      throw new Error(`Unexpected SMSPool path: ${parsedUrl.pathname}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    readAuthTabSnapshot: async () => ({
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    }),
+    navigateAuthTabToAddPhone: async () => ({
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    }),
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'READ_PHONE_PAGE_STATE') {
+        return {
+          addPhonePage: true,
+          phoneVerificationPage: false,
+          url: 'https://auth.openai.com/add-phone',
+        };
+      }
+      if (message.type === 'RETURN_TO_ADD_PHONE') {
+        return {
+          addPhonePage: true,
+          phoneVerificationPage: false,
+          url: 'https://auth.openai.com/add-phone',
+        };
+      }
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        submittedPhones.push(message.payload?.phoneNumber);
+        return { phoneVerificationPage: true, url: 'https://auth.openai.com/phone-verification' };
+      }
+      if (message.type === 'RESEND_PHONE_VERIFICATION_CODE') {
+        return { probed: true, canResend: true, url: 'https://auth.openai.com/phone-verification' };
+      }
+      if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+        submitCodeCount += 1;
+        if (submitCodeCount === 1) {
+          return {
+            invalidCode: true,
+            errorText: 'Invalid verification code.',
+            url: 'https://auth.openai.com/phone-verification',
+          };
+        }
+        return { success: true, consentReady: true, url: 'https://auth.openai.com/authorize' };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.completePhoneVerificationFlow(1, {
+    addPhonePage: true,
+    phoneVerificationPage: false,
+    url: 'https://auth.openai.com/add-phone',
+  });
+
+  assert.equal(result.success, true);
+  assert.deepStrictEqual(submittedPhones, ['+12025550333', '+12025550444']);
+  assert.equal(currentState.reusablePhoneActivation.activationId, 'pool-history-good-resend');
+  assert.equal(badResendCount, 1);
+  assert.equal(
+    requests.filter((entry) => entry.url.pathname === '/sms/check' && entry.options.body === 'key=demo-smspool-key&orderid=pool-history-bad-resend').length,
+    1
+  );
+  assert.equal(
+    requests.filter((entry) => entry.url.pathname === '/sms/check_resend' && entry.options.body === 'key=demo-smspool-key&orderid=pool-history-bad-resend').length,
+    1
+  );
+  assert.equal(
+    requests.filter((entry) => entry.url.pathname === '/request/history').length,
+    2
+  );
+});
+
+test('phone verification helper falls back to SMSPool purchase when history has no reusable number', async () => {
+  const requests = [];
+  let currentState = {
+    phoneSmsProvider: 'smspool',
+    smsPoolApiKey: 'demo-smspool-key',
+    smsPoolCountryId: 'US',
+    smsPoolCountryLabel: 'United States',
+    smsPoolServiceId: '671',
+    smsPoolServiceLabel: 'OpenAI / ChatGPT',
+    smsPoolPoolId: '7',
+    smsPoolReuseUsedNumbersEnabled: true,
+    phoneSmsReuseEnabled: true,
+    verificationResendCount: 0,
+    phoneVerificationReplacementLimit: 2,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 1,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+
+  const smsPoolSource = fs.readFileSync('phone-sms/providers/sms-pool.js', 'utf8');
+  const smsPoolModule = new Function('self', `${smsPoolSource}; return self.PhoneSmsSmsPoolProvider;`)({});
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    createSmsPoolProvider: smsPoolModule.createProvider,
+    fetchImpl: async (url, options = {}) => {
+      const parsedUrl = new URL(url);
+      requests.push({ url: parsedUrl, options });
+      if (parsedUrl.pathname === '/request/history') {
+        assert.equal(options.body, 'key=demo-smspool-key&service=671&country=US&limit=50');
+        return { ok: true, status: 200, text: async () => JSON.stringify({ requests: [] }) };
+      }
+      if (parsedUrl.pathname === '/sms/resend' || parsedUrl.pathname === '/sms/check_resend') {
+        throw new Error(`${parsedUrl.pathname} should not be called without a history order`);
+      }
+      if (parsedUrl.pathname === '/purchase/sms') {
+        assert.equal(options.body, 'key=demo-smspool-key&country=US&service=671&pool=7');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            success: true,
+            order_code: 'pool-new-1',
+            phonenumber: '12025550999',
+            short_name: 'US',
+            country: 'United States',
+            service_id: '671',
+          }),
+        };
+      }
+      if (parsedUrl.pathname === '/sms/check') {
+        assert.equal(options.body, 'key=demo-smspool-key&orderid=pool-new-1');
+        return { ok: true, status: 200, text: async () => JSON.stringify({ success: true, status: 'completed', sms: 'Code: 123456' }) };
+      }
+      throw new Error(`Unexpected SMSPool path: ${parsedUrl.pathname}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        return { phoneVerificationPage: true, url: 'https://auth.openai.com/phone-verification' };
+      }
+      if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+        return { success: true, consentReady: true, url: 'https://auth.openai.com/authorize' };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.completePhoneVerificationFlow(1, {
+    addPhonePage: true,
+    phoneVerificationPage: false,
+    url: 'https://auth.openai.com/add-phone',
+  });
+
+  assert.deepStrictEqual(result, {
+    success: true,
+    consentReady: true,
+    url: 'https://auth.openai.com/authorize',
+  });
+  assert.equal(currentState.reusablePhoneActivation.activationId, 'pool-new-1');
+  assert.equal(currentState.reusablePhoneActivation.phoneNumber, '+12025550999');
+  assert.deepStrictEqual(
+    requests.map((entry) => entry.url.pathname),
+    [
+      '/request/history',
+      '/purchase/sms',
+      '/sms/check',
+    ]
+  );
+});

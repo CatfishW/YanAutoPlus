@@ -31,6 +31,7 @@
       DEFAULT_PHONE_SMS_PROVIDER: depsDefaultPhoneSmsProvider = 'hero-sms',
       DEFAULT_PHONE_SMS_PROVIDER_ORDER: depsDefaultPhoneSmsProviderOrder = ['hero-sms', '5sim', 'nexsms'],
       createFiveSimProvider = null,
+      createSmsPoolProvider = null,
       HERO_SMS_COUNTRY_ID = 52,
       HERO_SMS_COUNTRY_LABEL = 'Thailand',
       HERO_SMS_SERVICE_CODE = 'dr',
@@ -597,6 +598,10 @@
       return normalizeHeroSmsReuseEnabled(state?.heroSmsReuseEnabled);
     }
 
+    function normalizeSmsPoolReuseUsedNumbersEnabled(value) {
+      return Boolean(value);
+    }
+
     function normalizeFreePhoneReuseEnabled(value) {
       return Boolean(value);
     }
@@ -1156,7 +1161,7 @@
 
     function createResolvedSmsPoolProvider() {
       const rootScope = typeof self !== 'undefined' ? self : globalThis;
-      const factory = rootScope.PhoneSmsSmsPoolProvider?.createProvider;
+      const factory = createSmsPoolProvider || rootScope.PhoneSmsSmsPoolProvider?.createProvider;
       if (typeof factory !== 'function') {
         return null;
       }
@@ -1334,14 +1339,18 @@
       const rawProvider = String(record.provider || '').trim();
       const provider = normalizePhoneSmsProvider(rawProvider);
       const rawCountryId = record.countryId ?? record.country;
-      const fallbackCountryId = provider === PHONE_SMS_PROVIDER_FIVE_SIM ? 'england' : HERO_SMS_COUNTRY_ID;
+      const fallbackCountryId = provider === PHONE_SMS_PROVIDER_FIVE_SIM
+        ? 'england'
+        : (provider === PHONE_SMS_PROVIDER_SMSPOOL ? 'US' : HERO_SMS_COUNTRY_ID);
       const expiresAt = normalizeTimestampMs(record.expiresAt);
       const serviceCode = String(
         record.serviceCode
         || (
           provider === PHONE_SMS_PROVIDER_FIVE_SIM
             ? DEFAULT_FIVE_SIM_PRODUCT
-            : (provider === PHONE_SMS_PROVIDER_NEXSMS ? DEFAULT_NEX_SMS_SERVICE_CODE : HERO_SMS_SERVICE_CODE)
+            : (provider === PHONE_SMS_PROVIDER_NEXSMS
+              ? DEFAULT_NEX_SMS_SERVICE_CODE
+              : (provider === PHONE_SMS_PROVIDER_SMSPOOL ? '671' : HERO_SMS_SERVICE_CODE))
         )
       ).trim();
       const countryId = provider === PHONE_SMS_PROVIDER_FIVE_SIM
@@ -1349,18 +1358,28 @@
         : (
           provider === PHONE_SMS_PROVIDER_NEXSMS
             ? normalizeNexSmsCountryId(rawCountryId, 0)
-            : normalizeCountryId(rawCountryId, fallbackCountryId)
+            : (
+              provider === PHONE_SMS_PROVIDER_SMSPOOL
+                ? String(rawCountryId || fallbackCountryId).trim().toUpperCase()
+                : normalizeCountryId(rawCountryId, fallbackCountryId)
+            )
         );
+      const rawPrice = record.price ?? record.cost ?? record.maxPrice ?? record.selectedPrice;
+      const numericPrice = Number(rawPrice);
+      const price = Number.isFinite(numericPrice) && numericPrice >= 0
+        ? Math.round(numericPrice * 10000) / 10000
+        : null;
       return {
         activationId,
         phoneNumber,
         provider,
         serviceCode,
         countryId,
-        ...(provider === PHONE_SMS_PROVIDER_FIVE_SIM ? { countryCode: countryId } : {}),
+        ...(provider === PHONE_SMS_PROVIDER_FIVE_SIM || provider === PHONE_SMS_PROVIDER_SMSPOOL ? { countryCode: countryId } : {}),
         ...(countryLabel ? { countryLabel } : {}),
         successfulUses: normalizeUseCount(record.successfulUses),
         maxUses: Math.max(1, Math.floor(Number(record.maxUses) || DEFAULT_PHONE_NUMBER_MAX_USES)),
+        ...(price !== null ? { price } : {}),
         ...(expiresAt > 0 ? { expiresAt } : {}),
         ...(statusAction ? { statusAction } : {}),
         ...(record.source ? { source: String(record.source || '').trim() } : {}),
@@ -1786,6 +1805,17 @@
         return /5sim\s+check\s+activation\s+failed.*order\s+not\s+found|order\s+not\s+found|activation\s+not\s+found|no\s+such\s+order|订单不存在|订单.*失效/i.test(message);
       }
       return /activation\s+not\s+found|order\s+not\s+found|no\s+such\s+order|订单不存在|订单.*失效/i.test(message);
+    }
+
+    function shouldRotateSmsPoolCurrentNumberOnError(error, activation = null) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSPOOL) {
+        return false;
+      }
+      if (isStopRequestedError(error)) {
+        return false;
+      }
+      return true;
     }
 
     function isStopRequestedError(error) {
@@ -3580,6 +3610,25 @@
       if (normalizePhoneSmsProvider(state?.phoneSmsProvider) === PHONE_SMS_PROVIDER_SMSPOOL) {
         const provider = getSmsPoolProviderForState(state);
         if (provider) {
+          if (
+            normalizeSmsPoolReuseUsedNumbersEnabled(state?.smsPoolReuseUsedNumbersEnabled)
+            && !options?.skipReusableSmsPool
+            && typeof provider.requestReusableActivation === 'function'
+          ) {
+            try {
+              const reusableActivation = await provider.requestReusableActivation(state, options);
+              await addLog(
+                `步骤 ${getActivePhoneVerificationVisibleStep()}：SMSPool 已从历史订单重发号码 ${reusableActivation.phoneNumber}。`,
+                'info'
+              );
+              return reusableActivation;
+            } catch (error) {
+              await addLog(
+                `步骤 ${getActivePhoneVerificationVisibleStep()}：SMSPool 历史号码重发不可用，将购买新号码。${error.message || error}`,
+                'warn'
+              );
+            }
+          }
           return provider.requestActivation(state, options);
         }
       }
@@ -3928,7 +3977,15 @@
         throw new Error('缺少可复用的手机号接码订单。');
       }
       if (getActivationProviderId(normalizedActivation, state) === PHONE_SMS_PROVIDER_SMSPOOL) {
-        throw new Error('SMSPool 当前流程不支持复用手机号订单。');
+        const provider = getSmsPoolProviderForState(state);
+        if (provider && typeof provider.resendActivation === 'function') {
+          await provider.resendActivation(state, normalizedActivation);
+          return {
+            ...normalizedActivation,
+            source: 'smspool-used-resend',
+          };
+        }
+        throw new Error('SMSPool 当前流程缺少重发订单接口。');
       }
       if (getActivationProviderId(normalizedActivation, state) === PHONE_SMS_PROVIDER_FIVE_SIM) {
         const provider = getFiveSimProviderForState(state);
@@ -4166,6 +4223,16 @@
 
     async function requestAdditionalPhoneSms(state = {}, activation) {
       const config = resolvePhoneConfig(state);
+      if (getActivationProviderId(activation, state) === PHONE_SMS_PROVIDER_SMSPOOL) {
+        if (!normalizeSmsPoolReuseUsedNumbersEnabled(state?.smsPoolReuseUsedNumbersEnabled)) {
+          return;
+        }
+        const provider = getSmsPoolProviderForState(state);
+        if (provider && typeof provider.resendActivation === 'function') {
+          await provider.resendActivation(state, activation);
+        }
+        return;
+      }
       if (config.provider !== PHONE_SMS_PROVIDER_HERO) {
         return;
       }
@@ -5250,6 +5317,12 @@
             {
               blockedCountryIds: useBlockedCountryIds,
               countryPriceFloorByCountryId: useCountryPriceFloorByCountryId,
+              blockedOrderIds: providerCandidate === PHONE_SMS_PROVIDER_SMSPOOL
+                ? (Array.isArray(options?.blockedSmsPoolOrderIds) ? options.blockedSmsPoolOrderIds : [])
+                : [],
+              blockedPhoneNumbers: providerCandidate === PHONE_SMS_PROVIDER_SMSPOOL
+                ? (Array.isArray(options?.blockedSmsPoolPhoneNumbers) ? options.blockedSmsPoolPhoneNumbers : [])
+                : [],
             }
           );
           const providerLabel = getPhoneSmsProviderLabel(providerCandidate);
@@ -5343,7 +5416,8 @@
       }
       const reusableProvider = normalizedActivation.provider;
       const canPersistReusableActivation = reusableProvider === PHONE_SMS_PROVIDER_HERO
-        || reusableProvider === PHONE_SMS_PROVIDER_5SIM;
+        || reusableProvider === PHONE_SMS_PROVIDER_5SIM
+        || reusableProvider === PHONE_SMS_PROVIDER_SMSPOOL;
       if (!canPersistReusableActivation) {
         await clearReusableActivation();
         return;
@@ -5553,7 +5627,11 @@
       }
       const providerLabel = normalizedActivation.provider === PHONE_SMS_PROVIDER_5SIM
         ? '5sim'
-        : (normalizedActivation.provider === PHONE_SMS_PROVIDER_NEXSMS ? 'NexSMS' : 'HeroSMS');
+        : (
+          normalizedActivation.provider === PHONE_SMS_PROVIDER_SMSPOOL
+            ? 'SMSPool'
+            : (normalizedActivation.provider === PHONE_SMS_PROVIDER_NEXSMS ? 'NexSMS' : 'HeroSMS')
+        );
       const usePageResend = normalizedActivation.provider !== PHONE_SMS_PROVIDER_5SIM;
 
       const waitSeconds = normalizePhoneCodeWaitSeconds(state?.phoneCodeWaitSeconds);
@@ -5683,6 +5761,18 @@
                 reason: 'activation_not_found',
               };
             }
+            if (shouldRotateSmsPoolCurrentNumberOnError(error, normalizedActivation)) {
+              await addLog(
+                `步骤 9：SMSPool 号码 ${normalizedActivation.phoneNumber} 当前订单出错，立即更换号码。${error.message || error}`,
+                'warn'
+              );
+              await clearPhoneRuntimeCountdown();
+              return {
+                code: '',
+                replaceNumber: true,
+                reason: 'smspool_current_number_error',
+              };
+            }
             throw error;
           }
 
@@ -5777,6 +5867,18 @@
                   code: '',
                   replaceNumber: true,
                   reason: 'resend_server_error',
+                };
+              }
+              if (shouldRotateSmsPoolCurrentNumberOnError(resendError, normalizedActivation)) {
+                await addLog(
+                  `步骤 9：SMSPool 号码 ${normalizedActivation.phoneNumber} 重发当前订单出错，立即更换号码。${resendError.message || resendError}`,
+                  'warn'
+                );
+                await clearPhoneRuntimeCountdown();
+                return {
+                  code: '',
+                  replaceNumber: true,
+                  reason: 'smspool_current_number_error',
                 };
               }
               await addLog(`步骤 9：点击手机验证码页面重发按钮失败。${resendError.message}`, 'warn');
@@ -6356,10 +6458,30 @@
       let addPhoneReentryWithSameActivation = 0;
       const countrySmsFailureCounts = new Map();
       const countryPriceFloorByKey = new Map();
+      const blockedSmsPoolOrderIds = new Set();
+      const blockedSmsPoolPhoneNumbers = new Set();
+      const blockSmsPoolActivation = (activationCandidate) => {
+        const normalizedActivation = normalizeActivation(activationCandidate);
+        if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSPOOL) {
+          return;
+        }
+        const orderId = String(normalizedActivation.activationId || '').trim();
+        if (orderId) {
+          blockedSmsPoolOrderIds.add(orderId);
+        }
+        const phoneDigits = String(normalizedActivation.phoneNumber || '').replace(/\D+/g, '');
+        if (phoneDigits) {
+          blockedSmsPoolPhoneNumbers.add(phoneDigits);
+        }
+      };
       const normalizeCountryFailureKey = (countryId, provider = activation?.provider || state?.phoneSmsProvider || '') => {
         const normalizedProvider = normalizePhoneSmsProvider(provider || state?.phoneSmsProvider || '');
         if (normalizedProvider === PHONE_SMS_PROVIDER_5SIM) {
           const normalizedCountryCode = normalizeFiveSimCountryCode(countryId, '');
+          return normalizedCountryCode ? `${normalizedProvider}:${normalizedCountryCode}` : '';
+        }
+        if (normalizedProvider === PHONE_SMS_PROVIDER_SMSPOOL) {
+          const normalizedCountryCode = String(countryId || '').trim().toUpperCase();
           return normalizedCountryCode ? `${normalizedProvider}:${normalizedCountryCode}` : '';
         }
         if (normalizedProvider === PHONE_SMS_PROVIDER_NEXSMS) {
@@ -6405,6 +6527,11 @@
           const matched = resolveNexSmsCountryCandidates(state)
             .find((entry) => normalizeNexSmsCountryId(entry.id, -1) === normalizedCountryId);
           return matched?.label || `Country #${normalizedCountryId}`;
+        }
+        if (normalizedProvider === PHONE_SMS_PROVIDER_SMSPOOL) {
+          const matched = resolveCountryCandidatesForProvider(state, PHONE_SMS_PROVIDER_SMSPOOL)
+            .find((entry) => String(entry.id || '').trim().toUpperCase() === normalizedCountryKey.toUpperCase());
+          return matched?.label || normalizedCountryKey || 'Unknown country';
         }
         const normalizedCountryId = normalizeCountryId(normalizedCountryKey, 0);
         const matched = resolveCountryCandidates(state)
@@ -6508,7 +6635,11 @@
       const getCountryFailureKey = (countryId, providerId = normalizePhoneSmsProvider(state?.phoneSmsProvider)) => (
         normalizePhoneSmsProvider(providerId) === PHONE_SMS_PROVIDER_FIVE_SIM
           ? normalizeFiveSimCountryId(countryId, '')
-          : String(normalizeCountryId(countryId, 0) || '')
+          : (
+            normalizePhoneSmsProvider(providerId) === PHONE_SMS_PROVIDER_SMSPOOL
+              ? String(countryId || '').trim().toUpperCase()
+              : String(normalizeCountryId(countryId, 0) || '')
+          )
       );
 
       const getCountryFailureCount = (countryId, providerId = normalizePhoneSmsProvider(state?.phoneSmsProvider)) => {
@@ -6648,6 +6779,7 @@
         if (shouldCancelActivation && activation) {
           await cancelPhoneActivation(state, activation);
         }
+        blockSmsPoolActivation(activation);
         await clearCurrentActivation();
         activation = null;
         shouldCancelActivation = false;
@@ -6713,6 +6845,8 @@
                 activation = await acquirePhoneActivation(state, {
                   blockedCountryIds: getBlockedCountryIds(),
                   countryPriceFloorByCountryId: getCountryPriceFloorById(),
+                  blockedSmsPoolOrderIds: Array.from(blockedSmsPoolOrderIds),
+                  blockedSmsPoolPhoneNumbers: Array.from(blockedSmsPoolPhoneNumbers),
                   skipPreferredActivation: preferredActivationExhausted,
                 });
                 shouldCancelActivation = true;
@@ -6761,10 +6895,16 @@
               submitResult = await submitPhoneNumber(tabId, activation.phoneNumber, activation);
             } catch (submitError) {
               const submitErrorText = String(submitError?.message || submitError || 'unknown error');
-              if (isPhoneNumberDeliveryRefusedError(submitErrorText) || isRecoverableAddPhoneSubmitError(submitErrorText)) {
+              if (
+                shouldRotateSmsPoolCurrentNumberOnError(submitError, activation)
+                || isPhoneNumberDeliveryRefusedError(submitErrorText)
+                || isRecoverableAddPhoneSubmitError(submitErrorText)
+              ) {
                 await rotateActivationAfterAddPhoneFailure(
                   submitErrorText,
-                  isPhoneNumberDeliveryRefusedError(submitErrorText) ? 'phone_delivery_refused' : 'add_phone_submit_failed',
+                  shouldRotateSmsPoolCurrentNumberOnError(submitError, activation)
+                    ? 'smspool_current_number_error'
+                    : (isPhoneNumberDeliveryRefusedError(submitErrorText) ? 'phone_delivery_refused' : 'add_phone_submit_failed'),
                   { url: pageState?.url || '' }
                 );
                 continue;
@@ -6838,15 +6978,20 @@
                   || 'unknown error'
                 );
                 if (
+                  shouldRotateSmsPoolCurrentNumberOnError(retrySubmitError || retryRejectText, activation)
+                  || (
                   isPhoneNumberUsedError(retryRejectText)
                   || isPhoneNumberDeliveryRefusedError(retryRejectText)
                   || isRecoverableAddPhoneSubmitError(retryRejectText)
+                  )
                 ) {
                   await rotateActivationAfterAddPhoneFailure(
                     `add-phone keeps rejecting ${activation.phoneNumber} (${retryRejectText})`,
-                    isPhoneNumberUsedError(retryRejectText)
-                      ? 'phone_number_used'
-                      : (isPhoneNumberDeliveryRefusedError(retryRejectText) ? 'phone_delivery_refused' : 'add_phone_rejected'),
+                    shouldRotateSmsPoolCurrentNumberOnError(retrySubmitError || retryRejectText, activation)
+                      ? 'smspool_current_number_error'
+                      : (isPhoneNumberUsedError(retryRejectText)
+                        ? 'phone_number_used'
+                        : (isPhoneNumberDeliveryRefusedError(retryRejectText) ? 'phone_delivery_refused' : 'add_phone_rejected')),
                     submitResult || {}
                   );
                   continue;
@@ -6904,7 +7049,21 @@
             });
             await markFreeReusableActivationAfterCode(state, activation);
             await addLog(`步骤 9：已收到手机验证码 ${codeResult.code}。`, 'info');
-            const submitResult = await submitPhoneVerificationCode(tabId, codeResult.code);
+            let submitResult = null;
+            try {
+              submitResult = await submitPhoneVerificationCode(tabId, codeResult.code);
+            } catch (submitError) {
+              if (shouldRotateSmsPoolCurrentNumberOnError(submitError, activation)) {
+                shouldReplaceNumber = true;
+                replaceReason = 'smspool_current_number_error';
+                await addLog(
+                  `步骤 9：SMSPool 号码 ${activation.phoneNumber} 提交验证码时出错，立即更换号码。${submitError.message || submitError}`,
+                  'warn'
+                );
+                break;
+              }
+              throw submitError;
+            }
 
             if (submitResult.returnedToAddPhone) {
               await addLog(
@@ -6989,6 +7148,15 @@
                   }
                   await addLog('步骤 9：手机验证码被拒后已点击“重新发送短信”。', 'info');
                 } catch (resendError) {
+                  if (shouldRotateSmsPoolCurrentNumberOnError(resendError, activation)) {
+                    shouldReplaceNumber = true;
+                    replaceReason = 'smspool_current_number_error';
+                    await addLog(
+                      `步骤 9：SMSPool 号码 ${activation.phoneNumber} 验证码被拒后重发出错，立即更换号码。${resendError.message || resendError}`,
+                      'warn'
+                    );
+                    break;
+                  }
                   await addLog(`步骤 9：验证码被拒后点击重发失败。${resendError.message}`, 'warn');
                 }
                 if (shouldReplaceNumber) {
@@ -7060,6 +7228,7 @@
           if (shouldCancelActivation && activation) {
             await cancelPhoneActivation(state, activation);
           }
+          blockSmsPoolActivation(activation);
           if (isFreeAutoReuseActivation(activation)) {
             await retireFreeReusableActivation(
               `自动白嫖复用号码 ${activation.phoneNumber} 在失败后被更换。`

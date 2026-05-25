@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  EDU_SUBTOKEN_MAIL_PROVIDER,
   HOTMAIL_PROVIDER,
   getIcloudForwardMailConfig,
   getIcloudForwardMailProviderOptions,
@@ -14,6 +15,7 @@ const {
 test('normalizeMailProvider accepts 126 and falls back to 163', () => {
   assert.equal(normalizeMailProvider('126'), '126');
   assert.equal(normalizeMailProvider('163-vip'), '163-vip');
+  assert.equal(normalizeMailProvider('edu-subtoken-mail-api'), EDU_SUBTOKEN_MAIL_PROVIDER);
   assert.equal(normalizeMailProvider('unknown-provider'), '163');
 });
 
@@ -34,6 +36,16 @@ test('getMailProviderConfig preserves the hotmail provider sentinel', () => {
     {
       provider: HOTMAIL_PROVIDER,
       label: 'Hotmail（微软 Graph）',
+    }
+  );
+});
+
+test('getMailProviderConfig preserves the edu subtoken provider sentinel', () => {
+  assert.deepEqual(
+    getMailProviderConfig({ mailProvider: EDU_SUBTOKEN_MAIL_PROVIDER }),
+    {
+      provider: EDU_SUBTOKEN_MAIL_PROVIDER,
+      label: 'Edu Subtoken Mail API',
     }
   );
 });

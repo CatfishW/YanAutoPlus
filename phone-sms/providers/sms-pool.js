@@ -11,6 +11,8 @@
   const DEFAULT_POOL_LABEL = 'Foxtrot';
   const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
   const DEFAULT_MAX_USES = 1;
+  const DEFAULT_HISTORY_LIMIT = 50;
+  const PREFERRED_REUSE_PRICE = 0.07;
 
   function normalizeSmsPoolCountryId(value = '', fallback = DEFAULT_COUNTRY_ID) {
     const normalized = String(value || '').trim().toUpperCase();
@@ -58,6 +60,51 @@
       return '';
     }
     return String(Math.round(numeric * 10000) / 10000);
+  }
+
+  function normalizeSmsPoolCost(value = '') {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+    const numeric = Number(String(value).trim().replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      return null;
+    }
+    return Math.round(numeric * 10000) / 10000;
+  }
+
+  function isPreferredReusePrice(value) {
+    const price = normalizeSmsPoolCost(value);
+    return price !== null && Math.abs(price - PREFERRED_REUSE_PRICE) < 0.00001;
+  }
+
+  function shuffleSmsPoolActivations(activations = [], randomFn = Math.random) {
+    const shuffled = activations.slice();
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const rawRandom = typeof randomFn === 'function' ? Number(randomFn()) : Math.random();
+      const normalizedRandom = Number.isFinite(rawRandom)
+        ? Math.min(Math.max(rawRandom, 0), 0.999999999999)
+        : Math.random();
+      const swapIndex = Math.floor(normalizedRandom * (index + 1));
+      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+  }
+
+  function prioritizeReusableActivations(activations = [], deps = {}) {
+    const preferred = [];
+    const fallback = [];
+    for (const activation of activations) {
+      if (isPreferredReusePrice(activation?.price)) {
+        preferred.push(activation);
+      } else {
+        fallback.push(activation);
+      }
+    }
+    return [
+      ...shuffleSmsPoolActivations(preferred, deps.randomFn),
+      ...fallback,
+    ];
   }
 
   function normalizeSmsPoolCountryFallback(value = []) {
@@ -247,7 +294,7 @@
     if (!record || typeof record !== 'object' || Array.isArray(record)) {
       return null;
     }
-    const activationId = String(record.order_code ?? record.order_id ?? record.orderid ?? record.activationId ?? '').trim();
+    const activationId = String(record.order_code ?? record.order_id ?? record.orderid ?? record.activationId ?? record.id ?? '').trim();
     const phoneNumberRaw = String(record.phonenumber ?? record.phoneNumber ?? record.number ?? '').trim();
     const phoneNumber = phoneNumberRaw
       ? `+${phoneNumberRaw.replace(/^\+/, '')}`
@@ -267,6 +314,7 @@
       record.service_id ?? fallback.serviceCode,
       fallback.serviceCode || DEFAULT_SERVICE_ID
     );
+    const price = normalizeSmsPoolCost(record.cost ?? record.price ?? record.amount ?? record.rate);
     return {
       activationId,
       phoneNumber,
@@ -275,13 +323,74 @@
       countryId,
       countryLabel,
       successfulUses: Math.max(0, Math.floor(Number(record.successfulUses) || 0)),
-      maxUses: Math.max(1, Math.floor(Number(record.maxUses) || DEFAULT_MAX_USES)),
+      maxUses: Math.max(1, Math.floor(Number(record.maxUses) || fallback.maxUses || DEFAULT_MAX_USES)),
       ...(record.pool !== undefined ? { poolId: normalizeSmsPoolPoolId(record.pool, '') } : {}),
       ...(record.service ? { serviceLabel: normalizeSmsPoolServiceLabel(record.service, DEFAULT_SERVICE_LABEL) } : {}),
-      ...(record.cost !== undefined ? { price: Number(record.cost) } : {}),
+      ...(price !== null ? { price } : {}),
       ...(record.status ? { status: String(record.status) } : {}),
       ...(record.expiration !== undefined ? { expiresAt: Number(record.expiration) * 1000 } : {}),
+      ...(record.resend !== undefined ? { canResend: Boolean(Number(record.resend) || record.resend === true) } : {}),
     };
+  }
+
+  function collectActivationRecords(payload) {
+    if (Array.isArray(payload)) {
+      return payload.flatMap((entry) => collectActivationRecords(entry));
+    }
+    if (!payload || typeof payload !== 'object') {
+      return [];
+    }
+    const directKeys = ['data', 'orders', 'history', 'active', 'items', 'results', 'requests'];
+    const nested = directKeys
+      .filter((key) => Array.isArray(payload[key]))
+      .flatMap((key) => collectActivationRecords(payload[key]));
+    const hasOrderShape = Boolean(
+      payload.order_code
+      || payload.order_id
+      || payload.orderid
+      || payload.activationId
+      || payload.id
+      || payload.phonenumber
+      || payload.phoneNumber
+      || payload.number
+    );
+    return hasOrderShape ? [payload, ...nested] : nested;
+  }
+
+  function isSmsPoolOpenAiOrder(record = {}, state = {}) {
+    const configuredServiceId = normalizeSmsPoolServiceId(state.smsPoolServiceId, DEFAULT_SERVICE_ID);
+    const rawServiceId = String(record.service_id ?? record.serviceId ?? record.service_code ?? '').trim();
+    if (rawServiceId && rawServiceId !== configuredServiceId) {
+      return false;
+    }
+    const configuredServiceLabel = normalizeSmsPoolServiceLabel(state.smsPoolServiceLabel, DEFAULT_SERVICE_LABEL).toLowerCase();
+    const serviceText = String(record.service ?? record.service_name ?? record.serviceLabel ?? '').trim().toLowerCase();
+    return !serviceText || serviceText.includes('openai') || serviceText.includes('chatgpt') || configuredServiceLabel.includes(serviceText);
+  }
+
+  function isSmsPoolReusableOrder(record = {}, state = {}) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return false;
+    }
+    if (!isSmsPoolOpenAiOrder(record, state)) {
+      return false;
+    }
+    const statusText = String(record.status ?? record.status_text ?? record.type ?? '').trim().toLowerCase();
+    if (/cancel|refund|banned|expired|failed|error/i.test(statusText)) {
+      return false;
+    }
+    if (Object.prototype.hasOwnProperty.call(record, 'resend')) {
+      return Boolean(Number(record.resend) || record.resend === true);
+    }
+    return true;
+  }
+
+  function normalizeHistoryLimit(value = DEFAULT_HISTORY_LIMIT) {
+    const parsed = Math.floor(Number(value));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return DEFAULT_HISTORY_LIMIT;
+    }
+    return Math.max(1, Math.min(100, parsed));
   }
 
   function extractVerificationCode(rawCodeOrText) {
@@ -383,6 +492,7 @@
           countryId: countryConfig.id,
           countryLabel: countryConfig.label,
           serviceCode: serviceId,
+          maxUses: 3,
         });
         if (!activation) {
           const error = new Error(`SMSPool 购买手机号返回不可用响应：${describePayload(payload) || '空响应'}`);
@@ -399,6 +509,112 @@
       throw new Error(`SMSPool 已尝试 ${effectiveCandidates.length} 个候选国家，均无可用号码：${failures.join(' | ')}。`);
     }
     throw lastError || new Error('SMSPool 获取手机号失败。');
+  }
+
+  async function fetchReusableActivations(state = {}, options = {}, deps = {}) {
+    const config = resolveConfig(state, deps);
+    if (!config.apiKey) {
+      throw new Error('SMSPool API Key 缺失，请先在侧边栏保存接码 API Key。');
+    }
+    const payload = await fetchPayload(
+      config,
+      '/request/history',
+      {
+        key: config.apiKey,
+        service: normalizeSmsPoolServiceId(state.smsPoolServiceId, DEFAULT_SERVICE_ID),
+        country: normalizeSmsPoolCountryId(state.smsPoolCountryId, DEFAULT_COUNTRY_ID),
+        limit: normalizeHistoryLimit(options.limit),
+      },
+      'SMSPool 历史订单查询',
+    );
+    const fallback = {
+      countryId: normalizeSmsPoolCountryId(state.smsPoolCountryId, DEFAULT_COUNTRY_ID),
+      countryLabel: normalizeSmsPoolCountryLabel(state.smsPoolCountryLabel, DEFAULT_COUNTRY_LABEL),
+      serviceCode: normalizeSmsPoolServiceId(state.smsPoolServiceId, DEFAULT_SERVICE_ID),
+      maxUses: 3,
+    };
+    const blockedOrderIds = new Set(
+      (Array.isArray(options.blockedOrderIds) ? options.blockedOrderIds : [])
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean)
+    );
+    const blockedPhoneNumbers = new Set(
+      (Array.isArray(options.blockedPhoneNumbers) ? options.blockedPhoneNumbers : [])
+        .map((entry) => String(entry || '').replace(/\D+/g, ''))
+        .filter(Boolean)
+    );
+    return collectActivationRecords(payload)
+      .filter((record) => isSmsPoolReusableOrder(record, state))
+      .map((record) => normalizeActivation(record, fallback))
+      .filter(Boolean)
+      .filter((activation) => {
+        if (blockedOrderIds.has(String(activation.activationId || '').trim())) {
+          return false;
+        }
+        const phoneDigits = String(activation.phoneNumber || '').replace(/\D+/g, '');
+        return !phoneDigits || !blockedPhoneNumbers.has(phoneDigits);
+      });
+  }
+
+  async function resendActivation(state = {}, activation, deps = {}) {
+    const config = resolveConfig(state, deps);
+    if (!config.apiKey) {
+      throw new Error('SMSPool API Key 缺失，请先在侧边栏保存接码 API Key。');
+    }
+    const normalizedActivation = normalizeActivation(activation);
+    if (!normalizedActivation) {
+      throw new Error('缺少 SMSPool 手机号订单。');
+    }
+    const checkPayload = await fetchPayload(
+      config,
+      '/sms/check_resend',
+      {
+        key: config.apiKey,
+        orderid: normalizedActivation.activationId,
+      },
+      'SMSPool 检查号码重发'
+    );
+    if (checkPayload?.success === 0 || checkPayload?.success === false) {
+      const error = new Error(describePayload(checkPayload) || 'SMSPool 当前订单不可重发。');
+      error.payload = checkPayload;
+      throw error;
+    }
+    const payload = await fetchPayload(
+      config,
+      '/sms/resend',
+      {
+        key: config.apiKey,
+        orderid: normalizedActivation.activationId,
+      },
+      'SMSPool 重发短信'
+    );
+    if (payload?.success === 0 || payload?.success === false) {
+      const error = new Error(describePayload(payload) || 'SMSPool 重发短信失败。');
+      error.payload = payload;
+      throw error;
+    }
+    return describePayload(payload);
+  }
+
+  async function requestReusableActivation(state = {}, options = {}, deps = {}) {
+    const reusableActivations = await fetchReusableActivations(state, options, deps);
+    let lastError = null;
+    for (const activation of prioritizeReusableActivations(reusableActivations, deps)) {
+      try {
+        await resendActivation(state, activation, deps);
+        return {
+          ...activation,
+          source: 'smspool-used-resend',
+          maxUses: Math.max(activation.maxUses || 0, 3),
+        };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError) {
+      throw lastError;
+    }
+    throw new Error('SMSPool 没有可重发的历史号码。');
   }
 
   async function finishActivation(_state = {}, _activation, _deps = {}) {
@@ -487,6 +703,7 @@
       sleepWithStop: deps.sleepWithStop || (async () => {}),
       throwIfStopped: deps.throwIfStopped || (() => {}),
       requestTimeoutMs: deps.requestTimeoutMs || DEFAULT_REQUEST_TIMEOUT_MS,
+      randomFn: typeof deps.randomFn === 'function' ? deps.randomFn : Math.random,
     };
     return {
       id: PROVIDER_ID,
@@ -505,6 +722,9 @@
       normalizeServiceLabel: normalizeSmsPoolServiceLabel,
       resolveCountryCandidates,
       requestActivation: (state, options) => requestActivation(state, options, providerDeps),
+      requestReusableActivation: (state, options) => requestReusableActivation(state, options, providerDeps),
+      fetchReusableActivations: (state, options) => fetchReusableActivations(state, options, providerDeps),
+      resendActivation: (state, activation) => resendActivation(state, activation, providerDeps),
       finishActivation: (state, activation) => finishActivation(state, activation, providerDeps),
       cancelActivation: (state, activation) => cancelActivation(state, activation, providerDeps),
       banActivation: (state, activation) => banActivation(state, activation, providerDeps),
@@ -525,15 +745,19 @@
     DEFAULT_SERVICE_LABEL,
     DEFAULT_POOL_ID,
     DEFAULT_POOL_LABEL,
+    PREFERRED_REUSE_PRICE,
     createProvider,
     describePayload,
     normalizeSmsPoolCountryFallback,
     normalizeSmsPoolCountryId,
     normalizeSmsPoolCountryLabel,
+    normalizeSmsPoolCost,
     normalizeSmsPoolPoolId,
     normalizeSmsPoolPoolLabel,
     normalizeSmsPoolPrice,
     normalizeSmsPoolServiceId,
     normalizeSmsPoolServiceLabel,
+    prioritizeReusableActivations,
+    collectActivationRecords,
   };
 });

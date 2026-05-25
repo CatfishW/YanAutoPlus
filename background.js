@@ -64,7 +64,9 @@ importScripts(
   'luckmail-utils.js',
   'cloudflare-temp-email-utils.js',
   'cloudmail-utils.js',
+  'edu-subtoken-mail-utils.js',
   'background/cloudmail-provider.js',
+  'background/edu-subtoken-mail-provider.js',
   'icloud-utils.js',
   'mail-provider-utils.js',
   'content/activation-utils.js'
@@ -320,6 +322,29 @@ const {
   normalizeCloudMailMailApiMessages,
 } = self.CloudMailUtils;
 const {
+  DEFAULT_EDU_SUBTOKEN_MAIL_BASE_URL,
+  DEFAULT_EDU_SUBTOKEN_MAIL_ACCOUNT_PREFIX,
+  DEFAULT_EDU_SUBTOKEN_MAIL_NEXT_NUMBER,
+  DEFAULT_EDU_SUBTOKEN_MAIL_NUMBER_PADDING,
+  DEFAULT_MAIL_PAGE_SIZE: EDU_SUBTOKEN_MAIL_DEFAULT_PAGE_SIZE,
+  buildEduSubtokenMailBasicAuthHeader,
+  buildEduSubtokenMailHeaders,
+  buildEduSubtokenMailUsername,
+  generateEduSubtokenMailAccountPassword,
+  joinEduSubtokenMailUrl,
+  isValidEduSubtokenMailUsername,
+  normalizeEduSubtokenMailAccountPassword,
+  normalizeEduSubtokenMailAddress,
+  normalizeEduSubtokenMailBaseUrl,
+  normalizeEduSubtokenMailCurrentAccount,
+  normalizeEduSubtokenMailDomain,
+  normalizeEduSubtokenMailMessages,
+  normalizeEduSubtokenMailNextNumber,
+  normalizeEduSubtokenMailNumberPadding,
+  normalizeEduSubtokenMailReceiveMailbox,
+  normalizeEduSubtokenMailUsernamePart,
+} = self.EduSubtokenMailUtils;
+const {
   findIcloudAliasByEmail,
   getConfiguredIcloudHostPreference,
   getIcloudHostHintFromMessage,
@@ -463,6 +488,8 @@ const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUDFLARE_TEMP_EMAIL_GENERATOR = 'cloudflare-temp-email';
 const CLOUD_MAIL_PROVIDER = 'cloudmail';
 const CLOUD_MAIL_GENERATOR = 'cloudmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+const EDU_SUBTOKEN_MAIL_GENERATOR = 'edu-subtoken-mail-api';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const HOTMAIL_MAILBOXES = ['INBOX', 'Junk'];
 const STOP_ERROR_MESSAGE = '流程已被用户停止。';
@@ -1127,6 +1154,14 @@ const PERSISTED_SETTING_DEFAULTS = {
   cloudMailReceiveMailbox: '',
   cloudMailDomain: '',
   cloudMailDomains: [],
+  eduSubtokenMailBaseUrl: DEFAULT_EDU_SUBTOKEN_MAIL_BASE_URL,
+  eduSubtokenMailAccountPrefix: DEFAULT_EDU_SUBTOKEN_MAIL_ACCOUNT_PREFIX,
+  eduSubtokenMailNextNumber: DEFAULT_EDU_SUBTOKEN_MAIL_NEXT_NUMBER,
+  eduSubtokenMailNumberPadding: DEFAULT_EDU_SUBTOKEN_MAIL_NUMBER_PADDING,
+  eduSubtokenMailAccountSuffix: '',
+  eduSubtokenMailAccountPassword: '',
+  eduSubtokenMailCurrentAccount: null,
+  eduSubtokenMailDomain: 'edu.subtoken.vip',
   hotmailAccounts: [],
   hotmailAliasEnabled: false,
   outlookAliasMaxPerAccount: OUTLOOK_ALIAS_DEFAULT_MAX_PER_ACCOUNT,
@@ -1145,6 +1180,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   heroSmsCountryFallback: [],
   smsPoolApiKey: DEFAULT_SMS_POOL_API_KEY,
   smsPoolBaseUrl: DEFAULT_SMS_POOL_BASE_URL,
+  smsPoolReuseUsedNumbersEnabled: false,
   smsPoolCountryId: DEFAULT_SMS_POOL_COUNTRY_ORDER[0],
   smsPoolCountryLabel: 'United States',
   smsPoolCountryFallback: [],
@@ -2348,7 +2384,8 @@ function normalizeEmailGenerator(value = '') {
   }
   if (normalized === 'cloudflare') return 'cloudflare';
   if (normalized === CLOUDFLARE_TEMP_EMAIL_GENERATOR) return CLOUDFLARE_TEMP_EMAIL_GENERATOR;
-  if (normalized === 'cloudmail') return 'cloudmail';
+  if (normalized === CLOUD_MAIL_GENERATOR) return CLOUD_MAIL_GENERATOR;
+  if (normalized === EDU_SUBTOKEN_MAIL_GENERATOR) return EDU_SUBTOKEN_MAIL_GENERATOR;
   return 'duck';
 }
 
@@ -2650,6 +2687,7 @@ function normalizeMailProvider(value = '') {
     case LUCKMAIL_PROVIDER:
     case CLOUDFLARE_TEMP_EMAIL_PROVIDER:
     case CLOUD_MAIL_PROVIDER:
+    case EDU_SUBTOKEN_MAIL_PROVIDER:
     case '163':
     case '163-vip':
     case '126':
@@ -2887,6 +2925,42 @@ const {
   pollCloudMailVerificationCode,
   resolveCloudMailPollTargetEmail,
 } = cloudMailProvider;
+
+const eduSubtokenMailProvider = self.MultiPageBackgroundEduSubtokenMailProvider.createEduSubtokenMailProvider({
+  addLog,
+  broadcastDataUpdate,
+  buildEduSubtokenMailBasicAuthHeader,
+  buildEduSubtokenMailHeaders,
+  buildEduSubtokenMailUsername,
+  EDU_SUBTOKEN_MAIL_DEFAULT_PAGE_SIZE,
+  EDU_SUBTOKEN_MAIL_GENERATOR,
+  EDU_SUBTOKEN_MAIL_PROVIDER,
+  generateEduSubtokenMailAccountPassword,
+  getState,
+  isValidEduSubtokenMailUsername,
+  joinEduSubtokenMailUrl,
+  normalizeEduSubtokenMailAccountPassword,
+  normalizeEduSubtokenMailAddress,
+  normalizeEduSubtokenMailBaseUrl,
+  normalizeEduSubtokenMailCurrentAccount,
+  normalizeEduSubtokenMailDomain,
+  normalizeEduSubtokenMailMessages,
+  normalizeEduSubtokenMailNextNumber,
+  normalizeEduSubtokenMailNumberPadding,
+  normalizeEduSubtokenMailReceiveMailbox,
+  normalizeEduSubtokenMailUsernamePart,
+  persistRegistrationEmailState,
+  pickVerificationMessageWithTimeFallback,
+  setEmailState,
+  setPersistentSettings,
+  setState,
+  sleepWithStop,
+  throwIfStopped,
+});
+const {
+  fetchEduSubtokenMailAddress,
+  pollEduSubtokenMailVerificationCode,
+} = eduSubtokenMailProvider;
 
 function normalizeSub2ApiGroupNames(value = '') {
   const source = Array.isArray(value)
@@ -3233,6 +3307,7 @@ function normalizePersistentSettingValue(key, value) {
     case 'phoneVerificationEnabled':
     case 'phoneSignupReloginAfterBindEmailEnabled':
     case 'phoneSmsReuseEnabled':
+    case 'smsPoolReuseUsedNumbersEnabled':
     case 'freePhoneReuseEnabled':
     case 'freePhoneReuseAutoEnabled':
     case 'plusModeEnabled':
@@ -3310,6 +3385,9 @@ function normalizePersistentSettingValue(key, value) {
         }
         if (normalizedMailProvider === CLOUD_MAIL_PROVIDER) {
           return CLOUD_MAIL_PROVIDER;
+        }
+        if (normalizedMailProvider === EDU_SUBTOKEN_MAIL_PROVIDER) {
+          return EDU_SUBTOKEN_MAIL_PROVIDER;
         }
         return HOTMAIL_PROVIDER;
       }
@@ -3401,6 +3479,22 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeCloudMailDomain(value);
     case 'cloudMailDomains':
       return normalizeCloudMailDomains(value);
+    case 'eduSubtokenMailBaseUrl':
+      return normalizeEduSubtokenMailBaseUrl(value);
+    case 'eduSubtokenMailAccountPrefix':
+      return normalizeEduSubtokenMailUsernamePart(value, DEFAULT_EDU_SUBTOKEN_MAIL_ACCOUNT_PREFIX);
+    case 'eduSubtokenMailNextNumber':
+      return normalizeEduSubtokenMailNextNumber(value);
+    case 'eduSubtokenMailNumberPadding':
+      return normalizeEduSubtokenMailNumberPadding(value);
+    case 'eduSubtokenMailAccountSuffix':
+      return normalizeEduSubtokenMailUsernamePart(value, '');
+    case 'eduSubtokenMailAccountPassword':
+      return normalizeEduSubtokenMailAccountPassword(value);
+    case 'eduSubtokenMailCurrentAccount':
+      return normalizeEduSubtokenMailCurrentAccount(value);
+    case 'eduSubtokenMailDomain':
+      return normalizeEduSubtokenMailDomain(value);
     case 'hotmailAccounts':
       return normalizeHotmailAccounts(value);
     case 'hotmailAliasEnabled':
@@ -9326,6 +9420,7 @@ function getSourceLabel(source) {
     'luckmail-api': 'LuckMail（API 购邮）',
     'cloudflare-temp-email': 'Cloudflare Temp Email',
     'cloudmail': 'Cloud Mail',
+    'edu-subtoken-mail-api': 'Edu Subtoken Mail API',
     'plus-checkout': 'Plus Checkout',
     'paypal-flow': 'PayPal 授权页',
     'gopay-flow': 'GoPay 授权页',
@@ -11921,6 +12016,7 @@ function getEmailGeneratorLabel(generator) {
   if (generator === 'cloudflare') return 'Cloudflare 邮箱';
   if (generator === CLOUDFLARE_TEMP_EMAIL_GENERATOR) return 'Cloudflare Temp Email';
   if (generator === CLOUD_MAIL_GENERATOR) return 'Cloud Mail';
+  if (generator === EDU_SUBTOKEN_MAIL_GENERATOR) return 'Edu Subtoken Mail';
   return 'Duck 邮箱';
 }
 const mail2925SessionManager = self.MultiPageBackgroundMail2925Session?.createMail2925SessionManager({
@@ -12100,6 +12196,9 @@ async function fetchGeneratedEmail(state, options = {}) {
   const generator = normalizeEmailGenerator(options.generator ?? currentState.emailGenerator);
   if (generator === CLOUD_MAIL_GENERATOR) {
     return fetchCloudMailAddress(currentState, options);
+  }
+  if (generator === EDU_SUBTOKEN_MAIL_GENERATOR) {
+    return fetchEduSubtokenMailAddress(currentState, options);
   }
   return generatedEmailHelpers.fetchGeneratedEmail(state, options);
 }
@@ -13591,6 +13690,7 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   closeConflictingTabsForSource,
   CLOUDFLARE_TEMP_EMAIL_PROVIDER,
   CLOUD_MAIL_PROVIDER,
+  EDU_SUBTOKEN_MAIL_PROVIDER,
   completeNodeFromBackground,
   confirmCustomVerificationStepBypassRequest: (step) => chrome.runtime.sendMessage({
     type: 'REQUEST_CUSTOM_VERIFICATION_BYPASS_CONFIRMATION',
@@ -13611,6 +13711,7 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
   pollCloudflareTempEmailVerificationCode,
   pollCloudMailVerificationCode,
+  pollEduSubtokenMailVerificationCode,
   pollHotmailVerificationCode,
   pollLuckmailVerificationCode,
   sendToContentScript,
@@ -13744,6 +13845,7 @@ const step4Executor = self.MultiPageBackgroundStep4?.createStep4Executor({
   LUCKMAIL_PROVIDER,
   CLOUDFLARE_TEMP_EMAIL_PROVIDER,
   CLOUD_MAIL_PROVIDER,
+  EDU_SUBTOKEN_MAIL_PROVIDER,
   resolveVerificationStep: verificationFlowHelpers.resolveVerificationStep,
   reuseOrCreateTab,
   sendToContentScript,
@@ -13802,6 +13904,7 @@ const step8Executor = self.MultiPageBackgroundStep8?.createStep8Executor({
   chrome,
   CLOUDFLARE_TEMP_EMAIL_PROVIDER,
   CLOUD_MAIL_PROVIDER,
+  EDU_SUBTOKEN_MAIL_PROVIDER,
   completeNodeFromBackground,
   confirmCustomVerificationStepBypass: verificationFlowHelpers.confirmCustomVerificationStepBypass,
   ensureMail2925MailboxSession,
@@ -14418,6 +14521,9 @@ function getMailConfig(state) {
   }
   if (provider === 'cloudmail') {
     return { provider: 'cloudmail', label: 'Cloud Mail' };
+  }
+  if (provider === EDU_SUBTOKEN_MAIL_PROVIDER) {
+    return { provider: EDU_SUBTOKEN_MAIL_PROVIDER, label: 'Edu Subtoken Mail API' };
   }
   if (provider === '163') {
     return { source: 'mail-163', url: 'https://mail.163.com/js6/main.jsp?df=mail163_letter#module=mbox.ListModule%7C%7B%22fid%22%3A1%2C%22order%22%3A%22date%22%2C%22desc%22%3Atrue%7D', label: '163 邮箱' };

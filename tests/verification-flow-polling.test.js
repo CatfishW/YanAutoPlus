@@ -1498,6 +1498,60 @@ test('verification flow clicks resend before waiting for the next LuckMail /code
   ]);
 });
 
+test('verification flow gives Edu Subtoken Mail a longer SMTP delivery polling window', async () => {
+  const pollPayloads = [];
+
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    chrome: { tabs: { update: async () => {} } },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeNodeFromBackground: async () => {},
+    confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+    EDU_SUBTOKEN_MAIL_PROVIDER: 'edu-subtoken-mail-api',
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCloudflareTempEmailVerificationCode: async () => ({}),
+    pollEduSubtokenMailVerificationCode: async (_step, _state, payload) => {
+      pollPayloads.push(payload);
+      return { code: '654321', emailTimestamp: 123 };
+    },
+    pollHotmailVerificationCode: async () => ({}),
+    pollLuckmailVerificationCode: async () => ({}),
+    sendToContentScript: async () => ({}),
+    sendToMailContentScriptResilient: async () => ({}),
+    setState: async () => {},
+    setStepStatus: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  const result = await helpers.pollFreshVerificationCode(
+    4,
+    {
+      email: 'subtoken002@edu.subtoken.vip',
+      lastSignupCode: null,
+    },
+    { provider: 'edu-subtoken-mail-api', label: 'Edu Subtoken Mail API' },
+    {
+      maxAttempts: 5,
+      intervalMs: 3000,
+    }
+  );
+
+  assert.equal(result.code, '654321');
+  assert.equal(pollPayloads.length, 1);
+  assert.equal(pollPayloads[0].maxAttempts, 20);
+  assert.equal(pollPayloads[0].targetEmail, 'subtoken002@edu.subtoken.vip');
+});
+
 test('verification flow notifies onResendRequestedAt when resend is triggered', async () => {
   const resendRequestedAtCalls = [];
   const stateUpdates = [];

@@ -83,6 +83,11 @@ const rowTempEmailReceiveMailbox = createRow();
 const rowTempEmailRandomSubdomainToggle = createRow();
 const rowTempEmailDomain = createRow();
 const cloudflareTempEmailSection = createRow();
+const eduSubtokenMailSection = createRow();
+const rowEduSubtokenMailBaseUrl = createRow();
+const rowEduSubtokenMailAccountPattern = createRow();
+const rowEduSubtokenMailAccountPassword = createRow();
+const rowEduSubtokenMailCurrentAccount = createRow();
 const hotmailSection = createRow();
 const mail2925Section = createRow();
 const luckmailSection = createRow();
@@ -111,8 +116,11 @@ const selectEmailGenerator = {
     { value: 'icloud', hidden: false },
     { value: 'cloudflare-temp-email', hidden: false },
     { value: 'cloudmail', hidden: false },
+    { value: 'edu-subtoken-mail-api', hidden: false },
   ],
 };
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+const EDU_SUBTOKEN_MAIL_GENERATOR = 'edu-subtoken-mail-api';
 const inputTempEmailUseRandomSubdomain = { checked: false };
 const inputRunCount = { disabled: false };
 const currentAutoRun = { autoRunning: false };
@@ -161,6 +169,10 @@ ${bundle}
 return {
   updateMailProviderUI,
   rowEmailGenerator,
+  eduSubtokenMailSection,
+  rowEduSubtokenMailAccountPattern,
+  rowEduSubtokenMailAccountPassword,
+  rowEduSubtokenMailCurrentAccount,
   selectMailProvider,
   selectEmailGenerator,
 };
@@ -173,6 +185,7 @@ function buildNormalizeSupportedMailProviderApi() {
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
 ${bundle}
 return {
   normalizeSupportedMailProvider,
@@ -188,7 +201,7 @@ test('sidepanel html hides and disables email generator by default', () => {
 
 test('sidepanel html defaults registration email placeholder to hotmail pool allocation', () => {
   const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
-  assert.match(html, /id="input-email"[^>]*placeholder="由 Hotmail 账号池自动分配"/);
+  assert.match(html, /id="input-email"[^>]*placeholder="由 微软邮箱账户池 自动分配"/);
 });
 
 test('sidepanel html keeps cloudmail as a selectable mail provider', () => {
@@ -196,6 +209,14 @@ test('sidepanel html keeps cloudmail as a selectable mail provider', () => {
   assert.match(
     html,
     /<select id="select-mail-provider"[\s\S]*?<option value="cloudmail">Cloud Mail<\/option>/
+  );
+});
+
+test('sidepanel html keeps edu subtoken as a selectable mail provider', () => {
+  const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
+  assert.match(
+    html,
+    /<select id="select-mail-provider"[\s\S]*?<option value="edu-subtoken-mail-api">Edu Subtoken Mail API<\/option>/
   );
 });
 
@@ -222,7 +243,7 @@ test('updateMailProviderUI hides all email generator choices for hotmail provide
   assert.equal(api.selectEmailGenerator.disabled, true);
   assert.deepEqual(
     api.selectEmailGenerator.options.map((option) => option.hidden),
-    [true, true, true, true, true, true, true]
+    [true, true, true, true, true, true, true, true]
   );
 });
 
@@ -238,7 +259,7 @@ test('updateMailProviderUI locks cloudflare temp email provider to its own gener
   assert.equal(api.selectEmailGenerator.value, 'cloudflare-temp-email');
   assert.deepEqual(
     api.selectEmailGenerator.options.map((option) => option.hidden),
-    [true, true, true, true, true, false, true]
+    [true, true, true, true, true, false, true, true]
   );
 });
 
@@ -254,7 +275,27 @@ test('updateMailProviderUI locks cloudmail provider to its own generator', () =>
   assert.equal(api.selectEmailGenerator.value, 'cloudmail');
   assert.deepEqual(
     api.selectEmailGenerator.options.map((option) => option.hidden),
-    [true, true, true, true, true, true, false]
+    [true, true, true, true, true, true, false, true]
+  );
+});
+
+test('updateMailProviderUI locks edu subtoken provider to its own generator', () => {
+  const api = buildUpdateMailProviderUiApi();
+
+  api.selectMailProvider.value = 'edu-subtoken-mail-api';
+  api.selectEmailGenerator.value = 'duck';
+  api.updateMailProviderUI();
+
+  assert.equal(api.rowEmailGenerator.style.display, '');
+  assert.equal(api.eduSubtokenMailSection.style.display, '');
+  assert.equal(api.rowEduSubtokenMailAccountPattern.style.display, '');
+  assert.equal(api.rowEduSubtokenMailAccountPassword.style.display, '');
+  assert.equal(api.rowEduSubtokenMailCurrentAccount.style.display, '');
+  assert.equal(api.selectEmailGenerator.disabled, true);
+  assert.equal(api.selectEmailGenerator.value, 'edu-subtoken-mail-api');
+  assert.deepEqual(
+    api.selectEmailGenerator.options.map((option) => option.hidden),
+    [true, true, true, true, true, true, true, false]
   );
 });
 
@@ -262,6 +303,7 @@ test('normalizeSupportedMailProvider keeps cloudmail provider available', () => 
   const api = buildNormalizeSupportedMailProviderApi();
 
   assert.equal(api.normalizeSupportedMailProvider('cloudmail'), 'cloudmail');
+  assert.equal(api.normalizeSupportedMailProvider('edu-subtoken-mail-api'), 'edu-subtoken-mail-api');
   assert.equal(api.normalizeSupportedMailProvider('cloudflare-temp-email'), 'cloudflare-temp-email');
   assert.equal(api.normalizeSupportedMailProvider('hotmail-api'), 'hotmail-api');
   assert.equal(api.normalizeSupportedMailProvider('unknown-provider'), 'hotmail-api');

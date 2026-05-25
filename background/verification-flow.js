@@ -12,6 +12,7 @@
       closeConflictingTabsForSource,
       CLOUDFLARE_TEMP_EMAIL_PROVIDER,
       CLOUD_MAIL_PROVIDER = 'cloudmail',
+      EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api',
       completeNodeFromBackground,
       confirmCustomVerificationStepBypassRequest,
       getNodeIdByStepForState,
@@ -28,6 +29,7 @@
       MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
       pollCloudflareTempEmailVerificationCode,
       pollCloudMailVerificationCode,
+      pollEduSubtokenMailVerificationCode,
       pollHotmailVerificationCode,
       pollLuckmailVerificationCode,
       sendToContentScript,
@@ -984,6 +986,18 @@
           ...cleanPollOverrides,
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollCloudMailVerificationCode(step, state, timedPoll.payload);
+      }
+      if (mail.provider === EDU_SUBTOKEN_MAIL_PROVIDER) {
+        const basePayload = {
+          ...getVerificationPollPayload(step, state),
+          ...cleanPollOverrides,
+        };
+        const smtpDeliveryMaxAttempts = Math.max(20, Math.floor(Number(basePayload.maxAttempts) || 0));
+        const timedPoll = await applyMailPollingTimeBudget(step, {
+          ...basePayload,
+          maxAttempts: smtpDeliveryMaxAttempts,
+        }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
+        return pollEduSubtokenMailVerificationCode(step, state, timedPoll.payload);
       }
 
       if (Number(pollOverrides.resendIntervalMs) > 0) {
