@@ -1,7 +1,7 @@
 (function attachBackgroundContributionOAuth(root, factory) {
   root.MultiPageBackgroundContributionOAuth = factory();
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundContributionOAuthModule() {
-  const API_BASE_URL = '';
+  const API_BASE_URL = 'https://gujumpgate.zg.fyi/api/contribution/oauth';
   const ACTIVE_STATUSES = new Set(['started', 'waiting', 'processing']);
   const FINAL_STATUSES = new Set(['auto_approved', 'auto_rejected', 'manual_review_required', 'expired', 'error']);
   const CALLBACK_FINAL_STATUSES = new Set(['submitted']);

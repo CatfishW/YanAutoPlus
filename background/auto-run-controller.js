@@ -18,6 +18,7 @@
       getAutoRunStatusPayload,
       getErrorMessage,
       getFirstUnfinishedNodeId,
+      getNodeIdsForState,
       getPendingAutoRunTimerPlan,
       getRunningNodeIds,
       getState,
@@ -64,6 +65,66 @@
         return hasSavedNodeProgress(state.nodeStatuses || {}, state);
       }
       return false;
+    }
+
+    function getActiveWorkflowNodeIds(state = {}) {
+      if (typeof getNodeIdsForState === 'function') {
+        const nodeIds = getNodeIdsForState(state);
+        if (Array.isArray(nodeIds) && nodeIds.length) {
+          return nodeIds.map((nodeId) => String(nodeId || '').trim()).filter(Boolean);
+        }
+      }
+      return Object.keys(state?.nodeStatuses || {})
+        .map((nodeId) => String(nodeId || '').trim())
+        .filter(Boolean);
+    }
+
+    function normalizePreStartSkippedNodeIds(value = [], state = {}) {
+      const validSet = new Set(getActiveWorkflowNodeIds(state));
+      const source = Array.isArray(value)
+        ? value
+        : String(value || '')
+          .split(/[\r\n,，;；]+/)
+          .map((entry) => String(entry || '').trim())
+          .filter(Boolean);
+      const normalized = [];
+      const seen = new Set();
+      for (const entry of source) {
+        const nodeId = String(entry?.nodeId || entry?.id || entry || '').trim();
+        if (!nodeId || seen.has(nodeId) || (validSet.size && !validSet.has(nodeId))) {
+          continue;
+        }
+        seen.add(nodeId);
+        normalized.push(nodeId);
+      }
+      return normalized;
+    }
+
+    async function applyAutoRunPreStartSkippedNodes(rawNodeIds = []) {
+      let state = await getState();
+      const nodeIds = normalizePreStartSkippedNodeIds(rawNodeIds, state);
+      if (!nodeIds.length) {
+        return state;
+      }
+
+      const nodeStatuses = { ...(state.nodeStatuses || {}) };
+      const changed = [];
+      for (const nodeId of nodeIds) {
+        const currentStatus = String(nodeStatuses[nodeId] || 'pending').trim() || 'pending';
+        if (currentStatus === 'running' || ['completed', 'manual_completed', 'skipped'].includes(currentStatus)) {
+          continue;
+        }
+        nodeStatuses[nodeId] = 'skipped';
+        changed.push(nodeId);
+      }
+
+      if (!changed.length) {
+        return state;
+      }
+      await setState({ nodeStatuses });
+      await addLog(`自动运行：启动前已按配置跳过节点 ${changed.join('、')}。`, 'warn');
+      state = await getState();
+      return state;
     }
 
     async function waitForRunningWorkflowNodesToFinish(payload = {}) {
@@ -324,6 +385,7 @@
         autoRunSkipFailures = false,
         autoRunRetryNonFreeTrial = false,
         autoRunRetryPaypalCallback = false,
+        autoRunPreStartSkippedNodeIds = [],
         roundSummaries = [],
       } = options;
       if (totalRuns <= 1 || targetRun >= totalRuns) {
@@ -353,6 +415,7 @@
         autoRunSkipFailures,
         autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds,
         roundSummaries,
         countdownTitle: '线程间隔中',
         countdownNote: `第 ${Math.min(targetRun + 1, totalRuns)}/${totalRuns} 轮即将开始`,
@@ -360,6 +423,7 @@
         autoRunSkipFailures,
         autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds,
         autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
       });
       runtime.set({ autoRunActive: false });
@@ -371,6 +435,7 @@
         autoRunSkipFailures = false,
         autoRunRetryNonFreeTrial = false,
         autoRunRetryPaypalCallback = false,
+        autoRunPreStartSkippedNodeIds = [],
         roundSummaries = [],
       } = options;
       const fallbackThreadIntervalMinutes = normalizeAutoRunFallbackThreadIntervalMinutes(
@@ -394,6 +459,7 @@
         autoRunSkipFailures,
         autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds,
         roundSummaries,
         countdownTitle: '线程间隔中',
         countdownNote: `第 ${targetRun}/${totalRuns} 轮第 ${nextAttemptRun} 次尝试即将开始`,
@@ -401,6 +467,7 @@
         autoRunSkipFailures,
         autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds,
         autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
       });
       runtime.set({ autoRunActive: false });
@@ -425,7 +492,9 @@
         autoRunTimerPlan: null,
         scheduledAutoRunPlan: null,
       });
-      clearStopRequest();
+      if (!isStopError(error)) {
+        clearStopRequest();
+      }
     }
 
     function startAutoRunLoop(totalRuns, options = {}) {
@@ -490,6 +559,10 @@
 
       let successfulRuns = roundSummaries.filter((item) => item.status === 'success').length;
       const initialState = await getState();
+      const autoRunPreStartSkippedNodeIds = normalizePreStartSkippedNodeIds(
+        options.autoRunPreStartSkippedNodeIds ?? initialState?.autoRunPreStartSkippedNodeIds ?? [],
+        initialState
+      );
       const initialPhase = continueCurrentOnFirstAttempt && getRunningWorkflowNodes(initialState).length
         ? 'waiting_step'
         : 'running';
@@ -500,6 +573,7 @@
         autoRunSkipFailures,
         autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds,
         autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
         ...getAutoRunStatusPayload(initialPhase, {
           currentRun: showResumePosition ? resumeCurrentRun : 0,
@@ -519,7 +593,7 @@
         const keepSameEmailUntilAddPhone = autoRunSkipFailures && shouldKeepCustomMailProviderPoolEmail(currentRoundState);
         const maxAttemptsForRound = autoRunSkipFailures || autoRunRetryNonFreeTrial || autoRunRetryPaypalCallback
           ? (keepSameEmailUntilAddPhone ? Number.MAX_SAFE_INTEGER : AUTO_RUN_MAX_RETRIES_PER_ROUND + 1)
-          : Math.max(1, attemptRun);
+          : Math.max(AUTO_RUN_MAX_RETRIES_PER_ROUND + 1, attemptRun);
 
         while (attemptRun <= maxAttemptsForRound) {
           runtime.set({
@@ -540,6 +614,7 @@
                 attemptRun,
               });
             }
+            currentState = await applyAutoRunPreStartSkippedNodes(autoRunPreStartSkippedNodeIds);
             const resumeNodeId = getFirstUnfinishedWorkflowNode(currentState);
             if (resumeNodeId && hasSavedWorkflowProgress(currentState)) {
               startNodeId = resumeNodeId;
@@ -564,6 +639,13 @@
               hostedCheckoutPhoneNumber: prevState.hostedCheckoutPhoneNumber,
               hostedCheckoutSmsPoolText: prevState.hostedCheckoutSmsPoolText,
               hostedCheckoutSmsPoolUsage: prevState.hostedCheckoutSmsPoolUsage,
+              hostedCheckoutSmsPoolAutoDisableEnabled: prevState.hostedCheckoutSmsPoolAutoDisableEnabled,
+              hostedCheckoutFirstDirectResendEnabled: prevState.hostedCheckoutFirstDirectResendEnabled,
+              hostedCheckoutFirstResendWaitSeconds: prevState.hostedCheckoutFirstResendWaitSeconds,
+              hostedCheckoutSubsequentResendWaitSeconds: prevState.hostedCheckoutSubsequentResendWaitSeconds,
+              hostedCheckoutVerificationResendMaxAttempts: prevState.hostedCheckoutVerificationResendMaxAttempts,
+              hostedCheckoutVerificationPollAttempts: prevState.hostedCheckoutVerificationPollAttempts,
+              hostedCheckoutVerificationPollIntervalSeconds: prevState.hostedCheckoutVerificationPollIntervalSeconds,
               paypalEmail: prevState.paypalEmail,
               paypalPassword: prevState.paypalPassword,
               paypalAccounts: prevState.paypalAccounts,
@@ -571,6 +653,7 @@
               autoRunSkipFailures: prevState.autoRunSkipFailures,
               autoRunRetryNonFreeTrial: prevState.autoRunRetryNonFreeTrial,
               autoRunRetryPaypalCallback: prevState.autoRunRetryPaypalCallback,
+              autoRunPreStartSkippedNodeIds,
               autoRunFallbackThreadIntervalMinutes: prevState.autoRunFallbackThreadIntervalMinutes,
               autoRunDelayEnabled: prevState.autoRunDelayEnabled,
               autoRunDelayMinutes: prevState.autoRunDelayMinutes,
@@ -597,6 +680,11 @@
             };
             await resetState();
             await setState(keepSettings);
+            const postSkipState = await applyAutoRunPreStartSkippedNodes(autoRunPreStartSkippedNodeIds);
+            const firstUnfinishedAfterSkip = getFirstUnfinishedWorkflowNode(postSkipState);
+            if (firstUnfinishedAfterSkip) {
+              startNodeId = firstUnfinishedAfterSkip;
+            }
             deps.chrome.runtime.sendMessage({ type: 'AUTO_RUN_RESET' }).catch(() => { });
             await sleepWithStop(500);
           } else {
@@ -605,9 +693,15 @@
               autoRunSkipFailures,
               autoRunRetryNonFreeTrial,
               autoRunRetryPaypalCallback,
+              autoRunPreStartSkippedNodeIds,
               autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
               ...getAutoRunStatusPayload('running', { currentRun: targetRun, totalRuns, attemptRun, sessionId }),
             });
+            const postSkipState = await applyAutoRunPreStartSkippedNodes(autoRunPreStartSkippedNodeIds);
+            const firstUnfinishedAfterSkip = getFirstUnfinishedWorkflowNode(postSkipState);
+            if (firstUnfinishedAfterSkip) {
+              startNodeId = firstUnfinishedAfterSkip;
+            }
           }
 
           if (forceFreshTabsNextRun) {
@@ -697,6 +791,9 @@
             const blockedByHostedCheckoutGenericError = typeof isHostedCheckoutGenericErrorFailure === 'function'
               ? isHostedCheckoutGenericErrorFailure(err)
               : /HOSTED_CHECKOUT_GENERIC_ERROR::/i.test(err?.message || String(err || ''));
+            const blockedByHostedCheckoutCardFallback = typeof isHostedCheckoutCardFallbackFailure === 'function'
+              ? isHostedCheckoutCardFallbackFailure(err)
+              : /HOSTED_CHECKOUT_CARD_FALLBACK::/i.test(err?.message || String(err || ''));
             const blockedByHostedCheckoutVerificationResendLimit = typeof isHostedCheckoutVerificationResendLimitFailure === 'function'
               ? isHostedCheckoutVerificationResendLimitFailure(err)
               : /HOSTED_CHECKOUT_VERIFICATION_RESEND_LIMIT::/i.test(err?.message || String(err || ''));
@@ -715,11 +812,14 @@
             const retryableHostedCheckoutGenericError = blockedByHostedCheckoutGenericError
               && autoRunRetryPaypalCallback
               && attemptRun < maxPlusNonFreeTrialAttempts;
+            const retryableHostedCheckoutCardFallback = blockedByHostedCheckoutCardFallback
+              && attemptRun < maxPlusNonFreeTrialAttempts;
             const canRetry = !blockedByAddPhone
               && !blockedByPhoneNoSupply
               && !blockedByPlusNonFreeTrial
               && !blockedByGpcTaskEnded
               && !blockedByHostedCheckoutGenericError
+              && !blockedByHostedCheckoutCardFallback
               && !blockedByHostedCheckoutVerificationResendLimit
               && !blockedByCloudCheckoutAlreadyPaid
               && !blockedBySignupUserAlreadyExists
@@ -768,6 +868,7 @@
                   autoRunSkipFailures,
                   autoRunRetryNonFreeTrial,
                   autoRunRetryPaypalCallback,
+                  autoRunPreStartSkippedNodeIds,
                   roundSummaries,
                 });
                 if (parkedForRetry) {
@@ -832,6 +933,72 @@
                   autoRunSkipFailures,
                   autoRunRetryNonFreeTrial,
                   autoRunRetryPaypalCallback,
+                  autoRunPreStartSkippedNodeIds,
+                  roundSummaries,
+                });
+                if (parkedForRetry) {
+                  parkedByTimer = true;
+                  break;
+                }
+              } catch (sleepError) {
+                if (isStopError(sleepError)) {
+                  stoppedEarly = true;
+                  await appendRoundRecordIfNeeded('stopped', getErrorMessage(sleepError), sleepError);
+                  await addLog(`第 ${targetRun}/${totalRuns} 轮已被用户停止`, 'warn');
+                  await broadcastAutoRunStatus('stopped', {
+                    currentRun: targetRun,
+                    totalRuns,
+                    attemptRun,
+                    sessionId: 0,
+                  });
+                  break;
+                }
+                throw sleepError;
+              }
+              attemptRun += 1;
+              reuseExistingProgress = false;
+              continue;
+            }
+
+            if (retryableHostedCheckoutCardFallback) {
+              const retryIndex = attemptRun;
+              await addLog(`第 ${targetRun}/${totalRuns} 轮第 ${attemptRun} 次尝试落到银行卡分支：${reason}`, 'warn');
+              cancelPendingCommands('当前尝试因 hosted checkout 落到银行卡分支已放弃。');
+              await broadcastStopToContentScripts();
+              await broadcastAutoRunStatus('retrying', {
+                currentRun: targetRun,
+                totalRuns,
+                attemptRun,
+                sessionId,
+              });
+              forceFreshTabsNextRun = true;
+              await addLog(
+                `hosted checkout 银行卡分支默认自动重试：${Math.round(AUTO_RUN_RETRY_DELAY_MS / 1000)} 秒后换新邮箱，开始第 ${targetRun}/${totalRuns} 轮第 ${attemptRun + 1} 次尝试（第 ${retryIndex}/${AUTO_RUN_MAX_RETRIES_PER_ROUND} 次重试）。`,
+                'warn'
+              );
+              try {
+                await sleepWithStop(AUTO_RUN_RETRY_DELAY_MS);
+              } catch (sleepError) {
+                if (isStopError(sleepError)) {
+                  stoppedEarly = true;
+                  await appendRoundRecordIfNeeded('stopped', getErrorMessage(sleepError), sleepError);
+                  await addLog(`第 ${targetRun}/${totalRuns} 轮已被用户停止`, 'warn');
+                  await broadcastAutoRunStatus('stopped', {
+                    currentRun: targetRun,
+                    totalRuns,
+                    attemptRun,
+                    sessionId: 0,
+                  });
+                  break;
+                }
+                throw sleepError;
+              }
+              try {
+                const parkedForRetry = await waitBeforeAutoRunRetry(targetRun, totalRuns, attemptRun + 1, {
+                  autoRunSkipFailures,
+                  autoRunRetryNonFreeTrial,
+                  autoRunRetryPaypalCallback,
+                  autoRunPreStartSkippedNodeIds,
                   roundSummaries,
                 });
                 if (parkedForRetry) {
@@ -902,29 +1069,19 @@
               await appendRoundRecordIfNeeded('failed', reason, err);
               cancelPendingCommands('当前轮因接码号池暂无可用号码已终止。');
               await broadcastStopToContentScripts();
-              if (!autoRunSkipFailures) {
-                await addLog(
-                  `第 ${targetRun}/${totalRuns} 轮接码号池暂无可用号码，自动重试未开启，当前自动运行将停止。`,
-                  'warn'
-                );
-                stoppedEarly = true;
-                await broadcastAutoRunStatus('stopped', {
-                  currentRun: targetRun,
-                  totalRuns,
-                  attemptRun,
-                  sessionId: 0,
-                });
-                break;
-              }
-
-              await addLog(`第 ${targetRun}/${totalRuns} 轮接码号池暂无可用号码，本轮将直接失败并跳过剩余重试。`, 'warn');
               await addLog(
-                targetRun < totalRuns
-                  ? `第 ${targetRun}/${totalRuns} 轮因接码号池暂无可用号码提前结束，自动流程将继续下一轮。`
-                  : `第 ${targetRun}/${totalRuns} 轮因接码号池暂无可用号码提前结束，已无后续轮次，本次自动运行结束。`,
+                autoRunSkipFailures
+                  ? `第 ${targetRun}/${totalRuns} 轮接码号池暂无可用号码。该状态属于全局资源耗尽，已忽略“自动重试/跳过失败继续下一轮”并停止自动运行。`
+                  : `第 ${targetRun}/${totalRuns} 轮接码号池暂无可用号码，当前自动运行将停止。`,
                 'warn'
               );
-              forceFreshTabsNextRun = true;
+              stoppedEarly = true;
+              await broadcastAutoRunStatus('stopped', {
+                currentRun: targetRun,
+                totalRuns,
+                attemptRun,
+                sessionId: 0,
+              });
               break;
             }
 
@@ -1017,6 +1174,29 @@
                 autoRunRetryPaypalCallback
                   ? `第 ${targetRun}/${totalRuns} 轮检测到 PayPal Checkout genericError，已达到 PAYPAL回调自动重试上限，当前自动运行将停止。`
                   : `第 ${targetRun}/${totalRuns} 轮检测到 PayPal Checkout genericError，当前自动运行已停止，请在弹窗中选择“检查”或“重试”。`,
+                'warn'
+              );
+              stoppedEarly = true;
+              await broadcastAutoRunStatus('stopped', {
+                currentRun: targetRun,
+                totalRuns,
+                attemptRun,
+                sessionId: 0,
+              });
+              break;
+            }
+
+            if (blockedByHostedCheckoutCardFallback) {
+              roundSummary.status = 'failed';
+              roundSummary.finalFailureReason = reason;
+              await setState({
+                autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
+              });
+              await appendRoundRecordIfNeeded('failed', reason, err);
+              cancelPendingCommands('当前轮因 hosted checkout 连续落到银行卡分支已终止。');
+              await broadcastStopToContentScripts();
+              await addLog(
+                `第 ${targetRun}/${totalRuns} 轮检测到 hosted checkout 连续落到银行卡分支，已达到默认自动重试上限，当前自动运行将停止。`,
                 'warn'
               );
               stoppedEarly = true;
@@ -1189,6 +1369,7 @@
                   autoRunSkipFailures,
                   autoRunRetryNonFreeTrial,
                   autoRunRetryPaypalCallback,
+                  autoRunPreStartSkippedNodeIds,
                   roundSummaries,
                 });
                 if (parkedForRetry) {
@@ -1260,6 +1441,7 @@
             autoRunSkipFailures,
             autoRunRetryNonFreeTrial,
             autoRunRetryPaypalCallback,
+            autoRunPreStartSkippedNodeIds,
             roundSummaries,
           });
           if (parkedForNextRound) {
@@ -1325,7 +1507,9 @@
           sessionId: 0,
         }),
       });
-      clearStopRequest();
+      if (!(deps.getStopRequested() || stoppedEarly)) {
+        clearStopRequest();
+      }
     }
 
     return {

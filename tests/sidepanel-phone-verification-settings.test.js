@@ -176,8 +176,8 @@ test('sidepanel css does not hard-hide phone verification settings card', () => 
 test('sidepanel local preview fallback uses current YanAutoPlus version', () => {
   assert.doesNotMatch(sidepanelSource, /version_name:\s*'YanAutoPlus local preview'/);
   assert.doesNotMatch(sidepanelSource, /version:\s*'0\.0\.0'/);
-  assert.match(sidepanelSource, /version_name:\s*'YanAutoPlus 0\.1\.4'/);
-  assert.match(sidepanelSource, /version:\s*'0\.1\.4'/);
+  assert.match(sidepanelSource, /version_name:\s*'YanAutoPlus 0\.1\.5'/);
+  assert.match(sidepanelSource, /version:\s*'0\.1\.5'/);
 });
 
 test('sidepanel source supports SMSPool sidebar visibility in local preview', () => {

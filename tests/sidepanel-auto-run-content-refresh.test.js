@@ -52,6 +52,7 @@ function createApi({
   refreshImpl,
   runCount = 3,
   persistImpl,
+  preStartSkippedNodeIds = [],
 } = {}) {
   const bundle = [
     extractFunction('normalizePendingAutoRunStartRunCount'),
@@ -108,6 +109,9 @@ function shouldOfferAutoModeChoice() { return false; }
 async function openAutoStartChoiceDialog() { throw new Error('should not be called'); }
 function getFirstUnfinishedStep() { return 1; }
 function getRunningSteps() { return []; }
+function getSelectedPreStartSkippedNodeIds() {
+  return ${JSON.stringify(preStartSkippedNodeIds)};
+}
 function shouldWarnAutoRunFallbackRisk() { return false; }
 function isAutoRunFallbackRiskPromptDismissed() { return false; }
 async function openAutoRunFallbackRiskConfirmModal() { throw new Error('should not be called'); }
@@ -195,6 +199,21 @@ test('startAutoRunFromCurrentSettings freezes run count before async settings sy
     ['refresh', 'sync-settings', 'stale-status-reset', 'send']
   );
   assert.equal(events[3].message.payload.totalRuns, 20);
+});
+
+test('startAutoRunFromCurrentSettings sends pre-start skipped nodes to background', async () => {
+  const api = createApi({
+    preStartSkippedNodeIds: ['open-chatgpt', 'submit-signup-email'],
+  });
+
+  const result = await api.startAutoRunFromCurrentSettings();
+  const sendEvent = api.getEvents().find((entry) => entry.type === 'send');
+
+  assert.equal(result, true);
+  assert.deepEqual(
+    sendEvent.message.payload.autoRunPreStartSkippedNodeIds,
+    ['open-chatgpt', 'submit-signup-email']
+  );
 });
 
 test('startAutoRunFromCurrentSettings blocks when shared flow capability validation fails', async () => {

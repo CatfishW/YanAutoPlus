@@ -12,6 +12,12 @@ importScripts(
   'phone-sms/providers/hero-sms.js',
   'phone-sms/providers/five-sim.js',
   'phone-sms/providers/sms-pool.js',
+  'phone-sms/providers/nexsms.js',
+  'phone-sms/providers/smsbower.js',
+  'phone-sms/providers/sms-verification-number.js',
+  'phone-sms/providers/grizzlysms.js',
+  'phone-sms/providers/smspool.js',
+  'phone-sms/providers/chatgpt-api.js',
   'phone-sms/providers/registry.js',
   'background/phone-verification-flow.js',
   'background/account-run-history.js',
@@ -74,6 +80,8 @@ importScripts(
 
 const DEFAULT_ACTIVE_FLOW_ID = 'openai';
 const PLUS_ACCOUNT_ACCESS_STRATEGY_OAUTH = 'oauth';
+const PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH = 'sms_oauth';
+const PLUS_ACCOUNT_ACCESS_STRATEGY_PHONE_BIND_OAUTH = 'phone_bind_oauth';
 const PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION = 'sub2api_codex_session';
 const PLUS_ACCOUNT_ACCESS_STRATEGY_CPA_CODEX_SESSION = 'cpa_codex_session';
 const NORMAL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
@@ -96,6 +104,13 @@ const PLUS_PAYPAL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
   plusModeEnabled: true,
   plusPaymentMethod: 'paypal',
 }) || NORMAL_STEP_DEFINITIONS;
+const PLUS_PAYPAL_SMS_OAUTH_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
+  activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
+  plusModeEnabled: true,
+  plusPaymentMethod: 'paypal',
+  plusAccountAccessStrategy: PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH,
+  signupMethod: 'phone',
+}) || PLUS_PAYPAL_STEP_DEFINITIONS;
 const PLUS_PAYPAL_SUB2API_SESSION_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
   activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
   plusModeEnabled: true,
@@ -589,18 +604,28 @@ const PLUS_HOSTED_CHECKOUT_OAUTH_DELAY_MIN_SECONDS = 0;
 const PLUS_HOSTED_CHECKOUT_OAUTH_DELAY_MAX_SECONDS = 3600;
 const HOSTED_CHECKOUT_VERIFICATION_POPUP_DELAY_MIN_SECONDS = 0;
 const HOSTED_CHECKOUT_VERIFICATION_POPUP_DELAY_MAX_SECONDS = 60;
+const HOSTED_CHECKOUT_RESEND_WAIT_MIN_SECONDS = 0;
+const HOSTED_CHECKOUT_RESEND_WAIT_MAX_SECONDS = 300;
+const HOSTED_CHECKOUT_FIRST_RESEND_WAIT_DEFAULT_SECONDS = 20;
+const HOSTED_CHECKOUT_SUBSEQUENT_RESEND_WAIT_DEFAULT_SECONDS = 25;
+const HOSTED_CHECKOUT_VERIFICATION_RESEND_MAX_ATTEMPTS_DEFAULT = 1;
+const HOSTED_CHECKOUT_VERIFICATION_RESEND_MAX_ATTEMPTS_LIMIT = 10;
+const HOSTED_CHECKOUT_VERIFICATION_POLL_ATTEMPTS_DEFAULT = 6;
+const HOSTED_CHECKOUT_VERIFICATION_POLL_ATTEMPTS_LIMIT = 60;
+const HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_DEFAULT_SECONDS = 5;
+const HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_LIMIT_SECONDS = 60;
 const OUTLOOK_ALIAS_DEFAULT_MAX_PER_ACCOUNT = 5;
 const OUTLOOK_ALIAS_MAX_PER_ACCOUNT_LIMIT = 50;
 const OUTLOOK_SUBSCRIPTION_USED_KEYWORD = 'ChatGPT Plus Subscription';
 const VERIFICATION_RESEND_COUNT_MIN = 0;
 const VERIFICATION_RESEND_COUNT_MAX = 20;
-const DEFAULT_VERIFICATION_RESEND_COUNT = 4;
+const DEFAULT_VERIFICATION_RESEND_COUNT = 0;
 const PHONE_REPLACEMENT_LIMIT_MIN = 1;
 const PHONE_REPLACEMENT_LIMIT_MAX = 20;
 const DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT = 3;
 const PHONE_CODE_WAIT_SECONDS_MIN = 15;
 const PHONE_CODE_WAIT_SECONDS_MAX = 300;
-const DEFAULT_PHONE_CODE_WAIT_SECONDS = 60;
+const DEFAULT_PHONE_CODE_WAIT_SECONDS = 120;
 const PHONE_CODE_TIMEOUT_WINDOWS_MIN = 1;
 const PHONE_CODE_TIMEOUT_WINDOWS_MAX = 10;
 const DEFAULT_PHONE_CODE_TIMEOUT_WINDOWS = 2;
@@ -630,23 +655,31 @@ const DEFAULT_LUCKMAIL_PROJECT_CODE = 'openai';
 const DEFAULT_HERO_SMS_BASE_URL = 'https://hero-sms.com/stubs/handler_api.php';
 const HERO_SMS_SERVICE_CODE = 'dr';
 const HERO_SMS_SERVICE_LABEL = 'OpenAI';
-const HERO_SMS_COUNTRY_ID = 52;
-const HERO_SMS_COUNTRY_LABEL = 'Thailand';
+const HERO_SMS_COUNTRY_ID = 33;
+const HERO_SMS_COUNTRY_LABEL = 'Colombia';
 const PHONE_SMS_PROVIDER_HERO = 'hero-sms';
 const PHONE_SMS_PROVIDER_5SIM = '5sim';
 const PHONE_SMS_PROVIDER_SMSPOOL = 'smspool';
 const PHONE_SMS_PROVIDER_HERO_SMS = PHONE_SMS_PROVIDER_HERO;
 const PHONE_SMS_PROVIDER_FIVE_SIM = PHONE_SMS_PROVIDER_5SIM;
 const PHONE_SMS_PROVIDER_NEXSMS = 'nexsms';
+const PHONE_SMS_PROVIDER_SMSBOWER = 'smsbower';
+const PHONE_SMS_PROVIDER_SMS_VERIFICATION_NUMBER = 'sms-verification-number';
+const PHONE_SMS_PROVIDER_GRIZZLYSMS = 'grizzlysms';
+const PHONE_SMS_PROVIDER_CHATGPT_API = 'chatgpt-api';
 const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_SMSPOOL;
 const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
   PHONE_SMS_PROVIDER_SMSPOOL,
   PHONE_SMS_PROVIDER_HERO,
   PHONE_SMS_PROVIDER_5SIM,
   PHONE_SMS_PROVIDER_NEXSMS,
+  PHONE_SMS_PROVIDER_SMSBOWER,
+  PHONE_SMS_PROVIDER_SMS_VERIFICATION_NUMBER,
+  PHONE_SMS_PROVIDER_GRIZZLYSMS,
+  PHONE_SMS_PROVIDER_CHATGPT_API,
 ]);
 const DEFAULT_SMS_POOL_BASE_URL = 'https://api.smspool.net';
-const DEFAULT_SMS_POOL_API_KEY = '';
+const DEFAULT_SMS_POOL_API_KEY = 'oIzju8HvZAzzNdO4ucIL2hi5XECAim4P';
 const DEFAULT_SMS_POOL_COUNTRY_ORDER = Object.freeze(['US']);
 const DEFAULT_SMS_POOL_SERVICE_ID = '671';
 const DEFAULT_SMS_POOL_SERVICE_LABEL = 'OpenAI / ChatGPT';
@@ -659,6 +692,16 @@ const DEFAULT_FIVE_SIM_COUNTRY_ORDER = Object.freeze(['thailand']);
 const DEFAULT_NEX_SMS_BASE_URL = 'https://api.nexsms.net';
 const DEFAULT_NEX_SMS_SERVICE_CODE = 'ot';
 const DEFAULT_NEX_SMS_COUNTRY_ORDER = Object.freeze([1]);
+const DEFAULT_SMSBOWER_BASE_URL = 'https://smsbower.page/stubs/handler_api.php';
+const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
+const DEFAULT_SMS_VERIFICATION_NUMBER_BASE_URL = 'https://sms-verification-number.com/stubs/handler_api';
+const DEFAULT_SMS_VERIFICATION_NUMBER_SERVICE_CODE = 'dr';
+const DEFAULT_GRIZZLY_SMS_BASE_URL = 'https://api.grizzlysms.com/stubs/handler_api.php';
+const DEFAULT_GRIZZLY_SMS_SERVICE_CODE = 'dr';
+const DEFAULT_SMSPOOL_BASE_URL = 'https://api.smspool.net/stubs/handler_api.php?setting=smspool';
+const DEFAULT_SMSPOOL_SERVICE_CODE = '671';
+const DEFAULT_SMSPOOL_COUNTRY_ID = 1;
+const DEFAULT_SMSPOOL_COUNTRY_LABEL = 'United States';
 const DEFAULT_HERO_SMS_REUSE_ENABLED = true;
 const HERO_SMS_ACQUIRE_PRIORITY_COUNTRY = 'country';
 const HERO_SMS_ACQUIRE_PRIORITY_PRICE = 'price';
@@ -668,16 +711,23 @@ const FIVE_SIM_COUNTRY_ID = 'vietnam';
 const FIVE_SIM_COUNTRY_LABEL = '越南 (Vietnam)';
 const FIVE_SIM_SUPPORTED_COUNTRY_IDS = ['indonesia', 'thailand', 'vietnam'];
 const FIVE_SIM_SUPPORTED_COUNTRY_ID_SET = new Set(FIVE_SIM_SUPPORTED_COUNTRY_IDS);
-const HERO_SMS_SUPPORTED_COUNTRY_IDS = [6, 52, 187, 16, 151, 43, 73, 10];
+const HERO_SMS_SUPPORTED_COUNTRY_IDS = [4, 6, 8, 10, 15, 16, 32, 33, 43, 52, 73, 78, 151, 182, 187];
 const HERO_SMS_SUPPORTED_COUNTRY_ID_SET = new Set(HERO_SMS_SUPPORTED_COUNTRY_IDS.map(String));
 const HERO_SMS_COUNTRY_BY_PHONE_PREFIX = Object.freeze([
+  { prefix: '63', id: 4, label: 'Philippines' },
   { prefix: '84', id: 10, label: 'Vietnam' },
+  { prefix: '48', id: 15, label: 'Poland' },
+  { prefix: '254', id: 8, label: 'Kenya' },
   { prefix: '66', id: 52, label: 'Thailand' },
+  { prefix: '40', id: 32, label: 'Romania' },
+  { prefix: '57', id: 33, label: 'Colombia' },
   { prefix: '62', id: 6, label: 'Indonesia' },
   { prefix: '44', id: 16, label: 'United Kingdom' },
-  { prefix: '81', id: 151, label: 'Japan' },
+  { prefix: '81', id: 182, label: 'Japan' },
   { prefix: '49', id: 43, label: 'Germany' },
-  { prefix: '33', id: 73, label: 'France' },
+  { prefix: '55', id: 73, label: 'Brazil' },
+  { prefix: '33', id: 78, label: 'France' },
+  { prefix: '56', id: 151, label: 'Chile' },
   { prefix: '1', id: 187, label: 'USA' },
 ]);
 const FIVE_SIM_OPERATOR = DEFAULT_FIVE_SIM_OPERATOR;
@@ -1035,6 +1085,16 @@ const PERSISTED_SETTING_DEFAULTS = {
   hostedCheckoutPhoneNumber: '',
   hostedCheckoutSmsPoolText: '',
   hostedCheckoutSmsPoolUsage: {},
+  hostedCheckoutSmsPoolAutoDisableEnabled: false,
+  chatGptApiSmsPoolText: '',
+  chatGptApiSmsPoolUsage: {},
+  chatGptApiSmsPoolAutoDisableEnabled: false,
+  hostedCheckoutFirstDirectResendEnabled: false,
+  hostedCheckoutFirstResendWaitSeconds: HOSTED_CHECKOUT_FIRST_RESEND_WAIT_DEFAULT_SECONDS,
+  hostedCheckoutSubsequentResendWaitSeconds: HOSTED_CHECKOUT_SUBSEQUENT_RESEND_WAIT_DEFAULT_SECONDS,
+  hostedCheckoutVerificationResendMaxAttempts: HOSTED_CHECKOUT_VERIFICATION_RESEND_MAX_ATTEMPTS_DEFAULT,
+  hostedCheckoutVerificationPollAttempts: HOSTED_CHECKOUT_VERIFICATION_POLL_ATTEMPTS_DEFAULT,
+  hostedCheckoutVerificationPollIntervalSeconds: HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_DEFAULT_SECONDS,
   paypalEmail: '',
   paypalPassword: '',
   currentPayPalAccountId: '',
@@ -1087,6 +1147,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   autoRunRetryNonFreeTrial: false,
   autoRunRetryPaypalCallback: false,
   autoRunFallbackThreadIntervalMinutes: 0,
+  autoRunPreStartSkippedNodeIds: [],
   oauthFlowTimeoutEnabled: true,
   autoRunDelayEnabled: false,
   operationDelayEnabled: true,
@@ -1191,6 +1252,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   smsPoolPoolLabel: DEFAULT_SMS_POOL_POOL_LABEL,
   smsPoolMinPrice: '',
   smsPoolMaxPrice: '',
+  smsPoolPreferredPrice: '',
   fiveSimApiKey: '',
   fiveSimProduct: DEFAULT_FIVE_SIM_PRODUCT,
   fiveSimCountryId: FIVE_SIM_COUNTRY_ID,
@@ -1203,6 +1265,33 @@ const PERSISTED_SETTING_DEFAULTS = {
   nexSmsApiKey: '',
   nexSmsCountryOrder: [...DEFAULT_NEX_SMS_COUNTRY_ORDER],
   nexSmsServiceCode: DEFAULT_NEX_SMS_SERVICE_CODE,
+  smsBowerApiKey: '',
+  smsBowerBaseUrl: DEFAULT_SMSBOWER_BASE_URL,
+  smsBowerServiceCode: DEFAULT_SMSBOWER_SERVICE_CODE,
+  smsBowerCountryId: HERO_SMS_COUNTRY_ID,
+  smsBowerCountryLabel: HERO_SMS_COUNTRY_LABEL,
+  smsBowerCountryFallback: [],
+  smsBowerMinPrice: '',
+  smsBowerMaxPrice: '',
+  smsBowerPreferredPrice: '',
+  smsVerificationNumberApiKey: '',
+  smsVerificationNumberBaseUrl: DEFAULT_SMS_VERIFICATION_NUMBER_BASE_URL,
+  smsVerificationNumberServiceCode: DEFAULT_SMS_VERIFICATION_NUMBER_SERVICE_CODE,
+  smsVerificationNumberCountryId: HERO_SMS_COUNTRY_ID,
+  smsVerificationNumberCountryLabel: HERO_SMS_COUNTRY_LABEL,
+  smsVerificationNumberCountryFallback: [],
+  smsVerificationNumberMinPrice: '',
+  smsVerificationNumberMaxPrice: '',
+  smsVerificationNumberPreferredPrice: '',
+  grizzlySmsApiKey: '',
+  grizzlySmsBaseUrl: DEFAULT_GRIZZLY_SMS_BASE_URL,
+  grizzlySmsServiceCode: DEFAULT_GRIZZLY_SMS_SERVICE_CODE,
+  grizzlySmsCountryId: 52,
+  grizzlySmsCountryLabel: 'Thailand',
+  grizzlySmsCountryFallback: [],
+  grizzlySmsMinPrice: '',
+  grizzlySmsMaxPrice: '',
+  grizzlySmsPreferredPrice: '',
   phonePreferredActivation: null,
 };
 
@@ -1256,6 +1345,7 @@ const DEFAULT_STATE = {
   plusCheckoutCurrency: 'EUR',
   plusCheckoutSource: '',
   hostedCheckoutCurrentSmsEntry: null,
+  chatGptApiCurrentSmsEntry: null,
   plusBillingCountryText: '',
   plusBillingAddress: null,
   plusPaypalApprovedAt: null,
@@ -1486,6 +1576,99 @@ function normalizeHostedCheckoutVerificationPopupDelaySeconds(value, fallback = 
   );
 }
 
+function normalizeHostedCheckoutResendWaitSeconds(value, fallback = HOSTED_CHECKOUT_FIRST_RESEND_WAIT_DEFAULT_SECONDS) {
+  const rawValue = String(value ?? '').trim();
+  const fallbackValue = Math.min(
+    HOSTED_CHECKOUT_RESEND_WAIT_MAX_SECONDS,
+    Math.max(HOSTED_CHECKOUT_RESEND_WAIT_MIN_SECONDS, Math.floor(Number(fallback) || 0))
+  );
+  if (!rawValue) {
+    return fallbackValue;
+  }
+
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric)) {
+    return fallbackValue;
+  }
+
+  return Math.min(
+    HOSTED_CHECKOUT_RESEND_WAIT_MAX_SECONDS,
+    Math.max(HOSTED_CHECKOUT_RESEND_WAIT_MIN_SECONDS, Math.floor(numeric))
+  );
+}
+
+function normalizeHostedCheckoutVerificationResendMaxAttempts(
+  value,
+  fallback = HOSTED_CHECKOUT_VERIFICATION_RESEND_MAX_ATTEMPTS_DEFAULT
+) {
+  const rawValue = String(value ?? '').trim();
+  const fallbackValue = Math.min(
+    HOSTED_CHECKOUT_VERIFICATION_RESEND_MAX_ATTEMPTS_LIMIT,
+    Math.max(0, Math.floor(Number(fallback) || 0))
+  );
+  if (!rawValue) {
+    return fallbackValue;
+  }
+
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric)) {
+    return fallbackValue;
+  }
+
+  return Math.min(
+    HOSTED_CHECKOUT_VERIFICATION_RESEND_MAX_ATTEMPTS_LIMIT,
+    Math.max(0, Math.floor(numeric))
+  );
+}
+
+function normalizeHostedCheckoutVerificationPollAttempts(
+  value,
+  fallback = HOSTED_CHECKOUT_VERIFICATION_POLL_ATTEMPTS_DEFAULT
+) {
+  const rawValue = String(value ?? '').trim();
+  const fallbackValue = Math.min(
+    HOSTED_CHECKOUT_VERIFICATION_POLL_ATTEMPTS_LIMIT,
+    Math.max(1, Math.floor(Number(fallback) || HOSTED_CHECKOUT_VERIFICATION_POLL_ATTEMPTS_DEFAULT))
+  );
+  if (!rawValue) {
+    return fallbackValue;
+  }
+
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric)) {
+    return fallbackValue;
+  }
+
+  return Math.min(
+    HOSTED_CHECKOUT_VERIFICATION_POLL_ATTEMPTS_LIMIT,
+    Math.max(1, Math.floor(numeric))
+  );
+}
+
+function normalizeHostedCheckoutVerificationPollIntervalSeconds(
+  value,
+  fallback = HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_DEFAULT_SECONDS
+) {
+  const rawValue = String(value ?? '').trim();
+  const fallbackValue = Math.min(
+    HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_LIMIT_SECONDS,
+    Math.max(1, Math.floor(Number(fallback) || HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_DEFAULT_SECONDS))
+  );
+  if (!rawValue) {
+    return fallbackValue;
+  }
+
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric)) {
+    return fallbackValue;
+  }
+
+  return Math.min(
+    HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_LIMIT_SECONDS,
+    Math.max(1, Math.floor(numeric))
+  );
+}
+
 function normalizeOutlookAliasMaxPerAccount(value, fallback = OUTLOOK_ALIAS_DEFAULT_MAX_PER_ACCOUNT) {
   const rawValue = String(value ?? '').trim();
   const fallbackNumber = Number(fallback);
@@ -1626,6 +1809,18 @@ function normalizeLocalHttpBaseUrl(value = '', fallback = 'http://127.0.0.1:1876
   }
 }
 
+function normalizeUrl(value = '', fallback = '') {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+    return fallback;
+  }
+}
+
 function normalizeHeroSmsMaxPrice(value = '') {
   const rawValue = String(value ?? '').trim();
   if (!rawValue) {
@@ -1699,20 +1894,43 @@ function normalizePhoneSmsProvider(value = '') {
   if (rootScope.PhoneSmsProviderRegistry?.normalizeProviderId) {
     return rootScope.PhoneSmsProviderRegistry.normalizeProviderId(value);
   }
+  const smsPoolProvider = typeof PHONE_SMS_PROVIDER_SMSPOOL !== 'undefined' ? PHONE_SMS_PROVIDER_SMSPOOL : 'smspool';
+  const fiveSimProvider = typeof PHONE_SMS_PROVIDER_FIVE_SIM !== 'undefined' ? PHONE_SMS_PROVIDER_FIVE_SIM : '5sim';
+  const nexSmsProvider = typeof PHONE_SMS_PROVIDER_NEXSMS !== 'undefined' ? PHONE_SMS_PROVIDER_NEXSMS : 'nexsms';
+  const smsBowerProvider = typeof PHONE_SMS_PROVIDER_SMSBOWER !== 'undefined' ? PHONE_SMS_PROVIDER_SMSBOWER : 'smsbower';
+  const smsVerificationNumberProvider = typeof PHONE_SMS_PROVIDER_SMS_VERIFICATION_NUMBER !== 'undefined'
+    ? PHONE_SMS_PROVIDER_SMS_VERIFICATION_NUMBER
+    : 'sms-verification-number';
+  const grizzlySmsProvider = typeof PHONE_SMS_PROVIDER_GRIZZLYSMS !== 'undefined' ? PHONE_SMS_PROVIDER_GRIZZLYSMS : 'grizzlysms';
+  const chatGptApiProvider = typeof PHONE_SMS_PROVIDER_CHATGPT_API !== 'undefined' ? PHONE_SMS_PROVIDER_CHATGPT_API : 'chatgpt-api';
+  const heroSmsProvider = typeof PHONE_SMS_PROVIDER_HERO_SMS !== 'undefined' ? PHONE_SMS_PROVIDER_HERO_SMS : 'hero-sms';
+  const defaultProvider = typeof DEFAULT_PHONE_SMS_PROVIDER !== 'undefined' ? DEFAULT_PHONE_SMS_PROVIDER : smsPoolProvider;
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === PHONE_SMS_PROVIDER_SMSPOOL) {
-    return PHONE_SMS_PROVIDER_SMSPOOL;
+  if (normalized === smsPoolProvider) {
+    return smsPoolProvider;
   }
-  if (normalized === PHONE_SMS_PROVIDER_FIVE_SIM) {
-    return PHONE_SMS_PROVIDER_FIVE_SIM;
+  if (normalized === fiveSimProvider) {
+    return fiveSimProvider;
   }
-  if (normalized === PHONE_SMS_PROVIDER_NEXSMS) {
-    return PHONE_SMS_PROVIDER_NEXSMS;
+  if (normalized === nexSmsProvider) {
+    return nexSmsProvider;
   }
-  if (normalized === PHONE_SMS_PROVIDER_HERO_SMS) {
-    return PHONE_SMS_PROVIDER_HERO_SMS;
+  if (normalized === smsBowerProvider) {
+    return smsBowerProvider;
   }
-  return DEFAULT_PHONE_SMS_PROVIDER;
+  if (normalized === smsVerificationNumberProvider) {
+    return smsVerificationNumberProvider;
+  }
+  if (normalized === grizzlySmsProvider) {
+    return grizzlySmsProvider;
+  }
+  if (normalized === chatGptApiProvider) {
+    return chatGptApiProvider;
+  }
+  if (normalized === heroSmsProvider) {
+    return heroSmsProvider;
+  }
+  return defaultProvider;
 }
 function normalizePhoneSmsProviderOrder(value = [], fallbackOrder = []) {
   const rootScope = typeof self !== 'undefined' ? self : globalThis;
@@ -1760,6 +1978,29 @@ function normalizePhoneSmsProviderOrder(value = [], fallbackOrder = []) {
   });
 
   return normalized.slice(0, DEFAULT_PHONE_SMS_PROVIDER_ORDER.length);
+}
+
+function normalizeAutoRunPreStartSkippedNodeIds(value = [], validNodeIds = []) {
+  const validSet = new Set((Array.isArray(validNodeIds) ? validNodeIds : [])
+    .map((nodeId) => String(nodeId || '').trim())
+    .filter(Boolean));
+  const source = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .split(/[\r\n,，;；]+/)
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of source) {
+    const nodeId = String(entry?.nodeId || entry?.id || entry || '').trim();
+    if (!nodeId || seen.has(nodeId) || (validSet.size && !validSet.has(nodeId))) {
+      continue;
+    }
+    seen.add(nodeId);
+    normalized.push(nodeId);
+  }
+  return normalized;
 }
 function normalizeSignupMethod(value = '') {
   return String(value || '').trim().toLowerCase() === 'phone'
@@ -1873,6 +2114,10 @@ function resolveSignupMethod(state = {}) {
     return normalizeSignupMethod(capabilityState.effectiveSignupMethod);
   }
   return method === SIGNUP_METHOD_PHONE && canUsePhoneSignup(state) ? SIGNUP_METHOD_PHONE : SIGNUP_METHOD_EMAIL;
+}
+
+function shouldDeferHotmailUsedMarkForPhoneSignup(state = {}) {
+  return isHotmailProvider(state) && resolveSignupMethod(state) === SIGNUP_METHOD_PHONE;
 }
 
 function hasSignupPhoneActivationState(state = {}) {
@@ -2243,6 +2488,7 @@ function normalizeAutoRunTimerPlan(plan) {
   const autoRunSkipFailures = Boolean(plan.autoRunSkipFailures);
   const autoRunRetryNonFreeTrial = Boolean(plan.autoRunRetryNonFreeTrial);
   const autoRunRetryPaypalCallback = Boolean(plan.autoRunRetryPaypalCallback);
+  const autoRunPreStartSkippedNodeIds = normalizeAutoRunPreStartSkippedNodeIds(plan.autoRunPreStartSkippedNodeIds);
   const mode = plan.mode === 'continue' ? 'continue' : 'restart';
   const currentRun = Math.max(0, Math.min(totalRuns, Math.floor(Number(plan.currentRun) || 0)));
   const attemptRun = Math.max(
@@ -2262,6 +2508,7 @@ function normalizeAutoRunTimerPlan(plan) {
       autoRunSkipFailures,
       autoRunRetryNonFreeTrial,
       autoRunRetryPaypalCallback,
+      autoRunPreStartSkippedNodeIds,
       mode,
       currentRun: 0,
       attemptRun: 0,
@@ -2282,6 +2529,7 @@ function normalizeAutoRunTimerPlan(plan) {
       autoRunSkipFailures,
       autoRunRetryNonFreeTrial,
       autoRunRetryPaypalCallback,
+      autoRunPreStartSkippedNodeIds,
       mode: 'restart',
       currentRun: normalizedCurrentRun,
       attemptRun: normalizedAttemptRun,
@@ -2301,6 +2549,7 @@ function normalizeAutoRunTimerPlan(plan) {
     autoRunSkipFailures,
     autoRunRetryNonFreeTrial,
     autoRunRetryPaypalCallback,
+    autoRunPreStartSkippedNodeIds,
     mode: 'restart',
     currentRun: normalizedCurrentRun,
     attemptRun: normalizedAttemptRun,
@@ -2333,6 +2582,7 @@ function normalizeAutoRunTimerPlanFromState(state = {}) {
     autoRunSkipFailures: state.scheduledAutoRunPlan?.autoRunSkipFailures ?? state.autoRunSkipFailures,
     autoRunRetryNonFreeTrial: state.scheduledAutoRunPlan?.autoRunRetryNonFreeTrial ?? state.autoRunRetryNonFreeTrial,
     autoRunRetryPaypalCallback: state.scheduledAutoRunPlan?.autoRunRetryPaypalCallback ?? state.autoRunRetryPaypalCallback,
+    autoRunPreStartSkippedNodeIds: state.scheduledAutoRunPlan?.autoRunPreStartSkippedNodeIds ?? state.autoRunPreStartSkippedNodeIds,
     autoRunSessionId: state.autoRunSessionId,
     mode: state.scheduledAutoRunPlan?.mode,
   });
@@ -2619,6 +2869,110 @@ async function markCurrentRegistrationAccountUsed(state = {}, options = {}) {
   return { updated };
 }
 
+async function markCurrentRegistrationAccountUnavailable(state = {}, options = {}) {
+  const providedState = state && typeof state === 'object' ? state : {};
+  const currentState = await getState();
+  const latestState = {
+    ...providedState,
+    ...(currentState && typeof currentState === 'object' ? currentState : {}),
+  };
+  const reasonPrefix = String(options.logPrefix || '').trim() || '当前账号';
+  const reasonLabel = String(options.reasonLabel || '').trim() || '邮箱已被占用';
+  const reasonCode = String(options.reason || '').trim() || 'identity_conflict';
+  const currentEmail = String(
+    latestState.email
+    || latestState.registrationEmailState?.current
+    || latestState.step8VerificationTargetEmail
+    || ''
+  ).trim();
+  let updated = false;
+
+  if (latestState.currentHotmailAccountId && isHotmailProvider(latestState)) {
+    const existingHotmailAccount = Array.isArray(latestState.hotmailAccounts)
+      ? latestState.hotmailAccounts.find((account) => String(account?.id || '').trim() === String(latestState.currentHotmailAccountId || '').trim())
+      : null;
+    if (
+      Boolean(latestState?.hotmailAliasEnabled)
+      && existingHotmailAccount
+      && currentEmail
+      && isOutlookPlusAliasForAccount(currentEmail, existingHotmailAccount)
+    ) {
+      const aliasAlreadyUsed = isHotmailAliasUsed(latestState.hotmailAliasUsage, existingHotmailAccount, currentEmail);
+      await setHotmailAliasUsageEntry(existingHotmailAccount, currentEmail, {
+        used: true,
+        lastCheckedAt: Date.now(),
+        reason: reasonCode,
+      });
+      if (!aliasAlreadyUsed) {
+        await addLog(`${reasonPrefix}：Outlook 别名 ${currentEmail} 因${reasonLabel}已标记为已用。`, options.level || 'warn');
+      }
+      const refreshedState = await getState();
+      if (
+        !existingHotmailAccount.used
+        && countHotmailUsedAliases(refreshedState.hotmailAliasUsage, existingHotmailAccount) >= normalizeOutlookAliasMaxPerAccount(refreshedState.outlookAliasMaxPerAccount)
+      ) {
+        await patchHotmailAccount(
+          latestState.currentHotmailAccountId,
+          {
+            used: true,
+            lastUsedAt: Date.now(),
+          },
+          {
+            preserveCurrentSelection: true,
+          }
+        );
+        await addLog(`${reasonPrefix}：Hotmail 账号的别名额度已因${reasonLabel}耗尽，基邮箱已标记为已用。`, options.level || 'warn');
+      }
+      updated = true;
+    } else if (existingHotmailAccount && !existingHotmailAccount.used) {
+      await patchHotmailAccount(
+        latestState.currentHotmailAccountId,
+        {
+          used: true,
+          lastUsedAt: Date.now(),
+        },
+        {
+          preserveCurrentSelection: true,
+        }
+      );
+      await addLog(`${reasonPrefix}：Hotmail 账号因${reasonLabel}已标记为已用。`, options.level || 'warn');
+      updated = true;
+    }
+  }
+
+  if (isLuckmailProvider(latestState)) {
+    const currentPurchase = getCurrentLuckmailPurchase(latestState);
+    if (currentPurchase?.id) {
+      await setLuckmailPurchaseUsedState(currentPurchase.id, true);
+      await clearLuckmailRuntimeState({ clearEmail: true });
+      await addLog(`${reasonPrefix}：LuckMail 邮箱 ${currentPurchase.email_address} 因${reasonLabel}已标记为已用。`, options.level || 'warn');
+      updated = true;
+    }
+  }
+
+  const icloudEmail = currentEmail.toLowerCase();
+  const knownIcloudAlias = icloudEmail && (
+    normalizeEmailGenerator(latestState?.emailGenerator) === 'icloud'
+    || Object.prototype.hasOwnProperty.call(getManualAliasUsageMap(latestState), icloudEmail)
+    || Object.prototype.hasOwnProperty.call(getPreservedAliasMap(latestState), icloudEmail)
+  );
+  if (knownIcloudAlias) {
+    await setIcloudAliasUsedState({ email: icloudEmail, used: true }, { silentLog: true });
+    await addLog(`${reasonPrefix}：iCloud 别名 ${icloudEmail} 因${reasonLabel}已标记为已用。`, options.level || 'warn');
+    updated = true;
+  }
+
+  if (typeof markCurrentCustomEmailPoolEntryUsed === 'function') {
+    const result = await markCurrentCustomEmailPoolEntryUsed(latestState, {
+      logPrefix: `${reasonPrefix}：自定义邮箱池`,
+      level: options.level || 'warn',
+    });
+    updated = Boolean(result?.updated) || updated;
+  }
+
+  return { updated };
+}
+
 function getCustomEmailPoolEmailForRun(state = {}, targetRun = 1) {
   const entries = getCustomEmailPool(state);
   const numericRun = Math.max(1, Math.floor(Number(targetRun) || 1));
@@ -2654,6 +3008,12 @@ function normalizePanelMode(value = '') {
 
 function normalizePlusAccountAccessStrategy(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH) {
+    return PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH;
+  }
+  if (normalized === PLUS_ACCOUNT_ACCESS_STRATEGY_PHONE_BIND_OAUTH) {
+    return PLUS_ACCOUNT_ACCESS_STRATEGY_PHONE_BIND_OAUTH;
+  }
   if (normalized === PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION) {
     return PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION;
   }
@@ -2668,6 +3028,18 @@ function normalizePlusAccountAccessStrategyForState(state = {}) {
     ? getPanelMode(state)
     : normalizePanelMode(state?.panelMode);
   const strategy = normalizePlusAccountAccessStrategy(state?.plusAccountAccessStrategy);
+  if (
+    (panelMode === 'cpa' || panelMode === 'local-cpa-json' || panelMode === 'local-cpa-json-no-rt' || panelMode === 'sub2api')
+    && strategy === PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH
+  ) {
+    return PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH;
+  }
+  if (
+    (panelMode === 'cpa' || panelMode === 'local-cpa-json' || panelMode === 'local-cpa-json-no-rt' || panelMode === 'sub2api')
+    && strategy === PLUS_ACCOUNT_ACCESS_STRATEGY_PHONE_BIND_OAUTH
+  ) {
+    return PLUS_ACCOUNT_ACCESS_STRATEGY_PHONE_BIND_OAUTH;
+  }
   if (panelMode === 'sub2api' && strategy === PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION) {
     return PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION;
   }
@@ -3181,8 +3553,69 @@ function normalizePersistentSettingValue(key, value) {
           usedAt: Math.max(0, Number(item.usedAt) || 0),
           lastAttemptAt: Math.max(0, Number(item.lastAttemptAt) || 0),
           lastError: String(item.lastError || '').trim(),
+          enabled: item.enabled !== false,
+          disabledReason: String(item.disabledReason || '').trim(),
+          disabledAt: Math.max(0, Number(item.disabledAt) || 0),
+          failureCount: Math.max(0, Math.floor(Number(item.failureCount) || 0)),
         }];
       }).filter(([key]) => Boolean(key)));
+    case 'hostedCheckoutSmsPoolAutoDisableEnabled':
+      return Boolean(value);
+    case 'chatGptApiSmsPoolText':
+      return String(value || '')
+        .replace(/\r/g, '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join('\n');
+    case 'chatGptApiSmsPoolUsage':
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+      }
+      return Object.fromEntries(Object.entries(value).map(([key, usage]) => {
+        const item = usage && typeof usage === 'object' && !Array.isArray(usage) ? usage : {};
+        const legacyUsedCount = Number(item.usedAt) > 0 ? 1 : 0;
+        const useCount = Math.max(0, Math.floor(Number(item.useCount ?? item.usageCount ?? legacyUsedCount) || 0));
+        return [String(key || '').trim(), {
+          useCount,
+          usedAt: Math.max(0, Number(item.usedAt) || 0),
+          lastAttemptAt: Math.max(0, Number(item.lastAttemptAt) || 0),
+          lastError: String(item.lastError || '').trim(),
+          enabled: item.enabled !== false,
+          disabledReason: String(item.disabledReason || '').trim(),
+          disabledAt: Math.max(0, Number(item.disabledAt) || 0),
+          failureCount: Math.max(0, Math.floor(Number(item.failureCount) || 0)),
+        }];
+      }).filter(([key]) => Boolean(key)));
+    case 'chatGptApiSmsPoolAutoDisableEnabled':
+      return Boolean(value);
+    case 'hostedCheckoutFirstDirectResendEnabled':
+      return Boolean(value);
+    case 'hostedCheckoutFirstResendWaitSeconds':
+      return normalizeHostedCheckoutResendWaitSeconds(
+        value,
+        PERSISTED_SETTING_DEFAULTS.hostedCheckoutFirstResendWaitSeconds
+      );
+    case 'hostedCheckoutSubsequentResendWaitSeconds':
+      return normalizeHostedCheckoutResendWaitSeconds(
+        value,
+        PERSISTED_SETTING_DEFAULTS.hostedCheckoutSubsequentResendWaitSeconds
+      );
+    case 'hostedCheckoutVerificationResendMaxAttempts':
+      return normalizeHostedCheckoutVerificationResendMaxAttempts(
+        value,
+        PERSISTED_SETTING_DEFAULTS.hostedCheckoutVerificationResendMaxAttempts
+      );
+    case 'hostedCheckoutVerificationPollAttempts':
+      return normalizeHostedCheckoutVerificationPollAttempts(
+        value,
+        PERSISTED_SETTING_DEFAULTS.hostedCheckoutVerificationPollAttempts
+      );
+    case 'hostedCheckoutVerificationPollIntervalSeconds':
+      return normalizeHostedCheckoutVerificationPollIntervalSeconds(
+        value,
+        PERSISTED_SETTING_DEFAULTS.hostedCheckoutVerificationPollIntervalSeconds
+      );
     case 'paypalEmail':
       return String(value || '').trim();
     case 'paypalPassword':
@@ -3361,6 +3794,8 @@ function normalizePersistentSettingValue(key, value) {
     }
     case 'autoRunFallbackThreadIntervalMinutes':
       return normalizeAutoRunFallbackThreadIntervalMinutes(value);
+    case 'autoRunPreStartSkippedNodeIds':
+      return normalizeAutoRunPreStartSkippedNodeIds(value);
     case 'autoRunDelayMinutes':
       return normalizeAutoRunDelayMinutes(value);
     case 'autoStepDelaySeconds':
@@ -3557,6 +3992,90 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeNexSmsCountryOrder(value);
     case 'nexSmsServiceCode':
       return normalizeNexSmsServiceCode(value);
+    case 'smsBowerApiKey':
+      return String(value || '');
+    case 'smsBowerBaseUrl':
+      return normalizeUrl(value, DEFAULT_SMSBOWER_BASE_URL);
+    case 'smsBowerServiceCode':
+      return normalizeNexSmsServiceCode(value, DEFAULT_SMSBOWER_SERVICE_CODE);
+    case 'smsBowerCountryId': {
+      const parsed = Math.floor(Number(value));
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+      return HERO_SMS_COUNTRY_ID;
+    }
+    case 'smsBowerCountryLabel':
+      return String(value || HERO_SMS_COUNTRY_LABEL).trim() || HERO_SMS_COUNTRY_LABEL;
+    case 'smsBowerCountryFallback':
+      return normalizeHeroSmsCountryFallback(value);
+    case 'smsBowerMinPrice':
+    case 'smsBowerMaxPrice':
+    case 'smsBowerPreferredPrice':
+      return normalizeHeroSmsMaxPrice(value);
+    case 'smsVerificationNumberApiKey':
+      return String(value || '');
+    case 'smsVerificationNumberBaseUrl':
+      return normalizeUrl(value, DEFAULT_SMS_VERIFICATION_NUMBER_BASE_URL);
+    case 'smsVerificationNumberServiceCode':
+      return normalizeNexSmsServiceCode(value, DEFAULT_SMS_VERIFICATION_NUMBER_SERVICE_CODE);
+    case 'smsVerificationNumberCountryId': {
+      const parsed = Math.floor(Number(value));
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+      return HERO_SMS_COUNTRY_ID;
+    }
+    case 'smsVerificationNumberCountryLabel':
+      return String(value || HERO_SMS_COUNTRY_LABEL).trim() || HERO_SMS_COUNTRY_LABEL;
+    case 'smsVerificationNumberCountryFallback':
+      return normalizeHeroSmsCountryFallback(value);
+    case 'smsVerificationNumberMinPrice':
+    case 'smsVerificationNumberMaxPrice':
+    case 'smsVerificationNumberPreferredPrice':
+      return normalizeHeroSmsMaxPrice(value);
+    case 'grizzlySmsApiKey':
+      return String(value || '');
+    case 'grizzlySmsBaseUrl':
+      return normalizeUrl(value, DEFAULT_GRIZZLY_SMS_BASE_URL);
+    case 'grizzlySmsServiceCode':
+      return normalizeNexSmsServiceCode(value, DEFAULT_GRIZZLY_SMS_SERVICE_CODE);
+    case 'grizzlySmsCountryId': {
+      const parsed = Math.floor(Number(value));
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+      return 52;
+    }
+    case 'grizzlySmsCountryLabel':
+      return String(value || 'Thailand').trim() || 'Thailand';
+    case 'grizzlySmsCountryFallback':
+      return normalizeHeroSmsCountryFallback(value);
+    case 'grizzlySmsMinPrice':
+    case 'grizzlySmsMaxPrice':
+    case 'grizzlySmsPreferredPrice':
+      return normalizeHeroSmsMaxPrice(value);
+    case 'smsPoolApiKey':
+      return String(value || '');
+    case 'smsPoolBaseUrl':
+      return normalizeUrl(value, DEFAULT_SMSPOOL_BASE_URL);
+    case 'smsPoolServiceCode':
+      return normalizeNexSmsServiceCode(value, DEFAULT_SMSPOOL_SERVICE_CODE);
+    case 'smsPoolCountryId': {
+      const parsed = Math.floor(Number(value));
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+      return DEFAULT_SMSPOOL_COUNTRY_ID;
+    }
+    case 'smsPoolCountryLabel':
+      return String(value || DEFAULT_SMSPOOL_COUNTRY_LABEL).trim() || DEFAULT_SMSPOOL_COUNTRY_LABEL;
+    case 'smsPoolCountryFallback':
+      return normalizeHeroSmsCountryFallback(value);
+    case 'smsPoolMinPrice':
+    case 'smsPoolMaxPrice':
+    case 'smsPoolPreferredPrice':
+      return normalizeHeroSmsMaxPrice(value);
     case 'phonePreferredActivation':
       return normalizePhonePreferredActivation(value);
     default:
@@ -5205,6 +5724,28 @@ function buildHotmailLocalEndpoint(baseUrl, path) {
   return new URL(path, `${normalizedBaseUrl}/`).toString();
 }
 
+function formatHotmailLocalHelperRequestError(endpoint, error) {
+  const rawMessage = String(error?.message || error || '').trim();
+  const lowerMessage = rawMessage.toLowerCase();
+  const looksLikeConnectionFailure = !rawMessage
+    || lowerMessage === 'failed to fetch'
+    || lowerMessage.includes('load failed')
+    || lowerMessage.includes('networkerror')
+    || lowerMessage.includes('connection refused')
+    || lowerMessage.includes('err_connection_refused')
+    || lowerMessage.includes('err_failed');
+  const healthUrl = String(endpoint || '').replace(/\/(?:messages|code)(?:[?#].*)?$/i, '/health');
+  if (looksLikeConnectionFailure) {
+    return [
+      `无法连接 Hotmail 本地助手（${endpoint}）。`,
+      `请先运行 start-hotmail-helper.bat，并确认侧边栏“本地助手地址”与助手窗口显示一致；默认健康检查地址：${healthUrl}。`,
+      '如果助手已启动，请检查端口是否被占用、防火墙/安全软件是否拦截本机 127.0.0.1 请求。',
+      rawMessage ? `原始错误：${rawMessage}` : '',
+    ].filter(Boolean).join(' ');
+  }
+  return `Hotmail 本地助手请求失败（${endpoint}）：${rawMessage || '未知网络错误'}`;
+}
+
 async function requestHotmailRemoteMailbox(account, mailbox = 'INBOX') {
   if (!account?.email) {
     throw new Error('Hotmail 账号缺少邮箱地址。');
@@ -5320,8 +5861,9 @@ async function requestHotmailLocalMessages(account, mailboxes = HOTMAIL_MAILBOXE
   const timeoutId = setTimeout(() => controller.abort(new Error('timeout')), requestTimeoutMs);
 
   let response;
+  const endpoint = buildHotmailLocalEndpoint(serviceSettings.localBaseUrl, '/messages');
   try {
-    response = await fetch(buildHotmailLocalEndpoint(serviceSettings.localBaseUrl, '/messages'), {
+    response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -5340,7 +5882,7 @@ async function requestHotmailLocalMessages(account, mailboxes = HOTMAIL_MAILBOXE
     if (err?.name === 'AbortError') {
       throw new Error(`Hotmail 本地助手请求超时（>${Math.round(requestTimeoutMs / 1000)} 秒）`);
     }
-    throw new Error(`Hotmail 本地助手请求失败：${err.message}`);
+    throw new Error(formatHotmailLocalHelperRequestError(endpoint, err));
   } finally {
     clearTimeout(timeoutId);
   }
@@ -5405,8 +5947,9 @@ async function requestHotmailLocalCode(account, pollPayload = {}) {
   const timeoutId = setTimeout(() => controller.abort(new Error('timeout')), requestTimeoutMs);
 
   let response;
+  const endpoint = buildHotmailLocalEndpoint(serviceSettings.localBaseUrl, '/code');
   try {
-    response = await fetch(buildHotmailLocalEndpoint(serviceSettings.localBaseUrl, '/code'), {
+    response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -5431,7 +5974,7 @@ async function requestHotmailLocalCode(account, pollPayload = {}) {
     if (err?.name === 'AbortError') {
       throw new Error(`Hotmail 本地助手请求超时（>${Math.round(requestTimeoutMs / 1000)} 秒）`);
     }
-    throw new Error(`Hotmail 本地助手请求失败：${err.message}`);
+    throw new Error(formatHotmailLocalHelperRequestError(endpoint, err));
   } finally {
     clearTimeout(timeoutId);
   }
@@ -9744,6 +10287,15 @@ function isSignupUserAlreadyExistsFailure(error) {
   return /SIGNUP_USER_ALREADY_EXISTS::|user_already_exists/i.test(message);
 }
 
+function isStep8EmailInUseFailure(error) {
+  const message = getErrorMessage(error);
+  return /STEP8_EMAIL_IN_USE::|email_in_use on add-email verification page/i.test(message);
+}
+
+function isRegistrationIdentityConflictFailure(error) {
+  return isSignupUserAlreadyExistsFailure(error) || isStep8EmailInUseFailure(error);
+}
+
 function isStep4Route405RecoveryLimitFailure(error) {
   const message = getErrorMessage(error);
   return /STEP4_405_RECOVERY_LIMIT::|步骤\s*4：检测到\s*405\s*错误页面，已连续点击“重试”恢复/i.test(message);
@@ -9767,6 +10319,11 @@ function isGpcTaskEndedFailure(error) {
 function isHostedCheckoutGenericErrorFailure(error) {
   const message = getErrorMessage(error);
   return /HOSTED_CHECKOUT_GENERIC_ERROR::|Things\s+don[’']?t\s+appear\s+to\s+be\s+working\s+at\s+the\s+moment|Sorry,\s*something\s+went\s+wrong\.?\s*Please\s+try\s+again/i.test(message);
+}
+
+function isHostedCheckoutCardFallbackFailure(error) {
+  const message = getErrorMessage(error);
+  return /HOSTED_CHECKOUT_CARD_FALLBACK::|hosted checkout[\s\S]*(?:落到|进入).*(?:银行卡|card)[\s\S]*(?:分支|支付)|未进入\s*PayPal|未跳转到\s*PayPal/i.test(message);
 }
 
 function isHostedCheckoutVerificationResendLimitFailure(error) {
@@ -9808,6 +10365,13 @@ function isPlusCheckoutRestartRequiredFailure(error) {
     && !isHostedCheckoutGenericErrorFailure(error)
     && !isHostedCheckoutVerificationResendLimitFailure(error)
     && !isCloudCheckoutAlreadyPaidFailure(error);
+}
+
+function shouldRetrySmsOauthNonFreeTrialFromStep7(state = {}, error = null) {
+  return isPlusCheckoutNonFreeTrialFailure(error)
+    && isPlusModeState(state)
+    && normalizePlusPaymentMethod(state?.plusPaymentMethod) === PLUS_PAYMENT_METHOD_PAYPAL
+    && normalizePlusAccountAccessStrategyForState(state) === PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH;
 }
 
 function isGoPayCheckoutRestartRequiredFailure(error) {
@@ -10422,6 +10986,7 @@ function getAutoRunTimerResumeOptions(plan) {
         autoRunSkipFailures: normalizedPlan.autoRunSkipFailures,
         autoRunRetryNonFreeTrial: normalizedPlan.autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback: normalizedPlan.autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds: normalizedPlan.autoRunPreStartSkippedNodeIds,
         mode: normalizedPlan.mode,
       },
       statusPayload: {
@@ -10441,6 +11006,7 @@ function getAutoRunTimerResumeOptions(plan) {
         autoRunSkipFailures: normalizedPlan.autoRunSkipFailures,
         autoRunRetryNonFreeTrial: normalizedPlan.autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback: normalizedPlan.autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds: normalizedPlan.autoRunPreStartSkippedNodeIds,
         mode: 'restart',
         resumeCurrentRun: nextRun,
         resumeAttemptRun: 1,
@@ -10461,6 +11027,7 @@ function getAutoRunTimerResumeOptions(plan) {
       autoRunSkipFailures: normalizedPlan.autoRunSkipFailures,
       autoRunRetryNonFreeTrial: normalizedPlan.autoRunRetryNonFreeTrial,
       autoRunRetryPaypalCallback: normalizedPlan.autoRunRetryPaypalCallback,
+      autoRunPreStartSkippedNodeIds: normalizedPlan.autoRunPreStartSkippedNodeIds,
       mode: 'restart',
       resumeCurrentRun: normalizedPlan.currentRun,
       resumeAttemptRun: normalizedPlan.attemptRun,
@@ -10557,6 +11124,7 @@ async function launchAutoRunTimerPlan(trigger = 'alarm', options = {}) {
         autoRunSkipFailures: plan.autoRunSkipFailures,
         autoRunRetryNonFreeTrial: plan.autoRunRetryNonFreeTrial,
         autoRunRetryPaypalCallback: plan.autoRunRetryPaypalCallback,
+        autoRunPreStartSkippedNodeIds: plan.autoRunPreStartSkippedNodeIds,
         autoRunRoundSummaries: serializeAutoRunRoundSummaries(plan.totalRuns, plan.roundSummaries),
         autoRunTimerPlan: null,
         scheduledAutoRunPlan: null,
@@ -10609,6 +11177,7 @@ async function scheduleAutoRun(totalRuns, options = {}) {
     autoRunSkipFailures: options.autoRunSkipFailures,
     autoRunRetryNonFreeTrial: options.autoRunRetryNonFreeTrial,
     autoRunRetryPaypalCallback: options.autoRunRetryPaypalCallback,
+    autoRunPreStartSkippedNodeIds: options.autoRunPreStartSkippedNodeIds,
     autoRunSessionId: sessionId,
     mode: options.mode,
   });
@@ -10622,6 +11191,7 @@ async function scheduleAutoRun(totalRuns, options = {}) {
     autoRunSkipFailures: timerPlan.autoRunSkipFailures,
     autoRunRetryNonFreeTrial: timerPlan.autoRunRetryNonFreeTrial,
     autoRunRetryPaypalCallback: timerPlan.autoRunRetryPaypalCallback,
+    autoRunPreStartSkippedNodeIds: timerPlan.autoRunPreStartSkippedNodeIds,
     autoRunRoundSummaries: serializeAutoRunRoundSummaries(timerPlan.totalRuns, []),
   });
   await addLog(
@@ -10695,6 +11265,7 @@ async function restoreAutoRunTimerIfNeeded() {
       autoRunSkipFailures: plan.autoRunSkipFailures,
       autoRunRetryNonFreeTrial: plan.autoRunRetryNonFreeTrial,
       autoRunRetryPaypalCallback: plan.autoRunRetryPaypalCallback,
+      autoRunPreStartSkippedNodeIds: plan.autoRunPreStartSkippedNodeIds,
       autoRunRoundSummaries: serializeAutoRunRoundSummaries(plan.totalRuns, plan.roundSummaries),
     });
   } else {
@@ -10769,7 +11340,11 @@ async function skipNode(nodeId) {
   await setNodeStatus(normalizedNodeId, 'skipped');
   await addLog(`节点 ${normalizedNodeId} 已跳过`, 'warn');
 
-  if (normalizedNodeId === 'fill-profile' && typeof markCurrentRegistrationAccountUsed === 'function') {
+  if (
+    normalizedNodeId === 'fill-profile'
+    && typeof markCurrentRegistrationAccountUsed === 'function'
+    && !shouldDeferHotmailUsedMarkForPhoneSignup(await getState())
+  ) {
     const latestState = await getState();
     await markCurrentRegistrationAccountUsed(latestState, {
       logPrefix: '步骤 5 跳过',
@@ -11011,7 +11586,10 @@ async function handleStepData(step, payload) {
         const step5Status = step5NodeId ? latestState.nodeStatuses?.[step5NodeId] : '';
         if (step5NodeId && step5Status !== 'running' && step5Status !== 'completed' && step5Status !== 'manual_completed') {
           await setNodeStatus(step5NodeId, 'skipped');
-          if (typeof markCurrentRegistrationAccountUsed === 'function') {
+          if (
+            typeof markCurrentRegistrationAccountUsed === 'function'
+            && !shouldDeferHotmailUsedMarkForPhoneSignup(latestState)
+          ) {
             await markCurrentRegistrationAccountUsed(latestState, {
               logPrefix: '步骤 3 跳过步骤 5',
               level: 'ok',
@@ -11351,8 +11929,11 @@ async function completeNodeFromBackground(nodeId, payload = {}) {
 
   if (normalizedNodeId === lastNodeId) {
     notifyNodeComplete(normalizedNodeId, payload);
-    void runCompletedNodeSideEffects(normalizedNodeId, payload, completionState, lastNodeId)
-      .catch((error) => reportCompletedNodeSideEffectError(normalizedNodeId, error));
+    try {
+      await runCompletedNodeSideEffects(normalizedNodeId, payload, completionState, lastNodeId);
+    } catch (error) {
+      await reportCompletedNodeSideEffectError(normalizedNodeId, error);
+    }
     return;
   }
 
@@ -11738,6 +12319,7 @@ async function requestStop(options = {}) {
       autoRunSkipFailures: timerPlan.autoRunSkipFailures,
       autoRunRetryNonFreeTrial: timerPlan.autoRunRetryNonFreeTrial,
       autoRunRetryPaypalCallback: timerPlan.autoRunRetryPaypalCallback,
+      autoRunPreStartSkippedNodeIds: timerPlan.autoRunPreStartSkippedNodeIds,
       autoRunRoundSummaries: serializeAutoRunRoundSummaries(timerPlan.totalRuns, timerPlan.roundSummaries),
       autoRunTimerPlan: null,
       scheduledAutoRunPlan: null,
@@ -11909,6 +12491,18 @@ async function executeNode(nodeId, options = {}) {
       await handleBrowserSwitchRequired(err);
       throw new Error(STOP_ERROR_MESSAGE);
     }
+    if (isRegistrationIdentityConflictFailure(err)) {
+      try {
+        await markCurrentRegistrationAccountUnavailable(errorState, {
+          logPrefix: '检测到当前注册邮箱不可再用',
+          level: 'warn',
+          reason: isStep8EmailInUseFailure(err) ? 'email_in_use' : 'user_already_exists',
+          reasonLabel: isStep8EmailInUseFailure(err) ? '邮箱已被使用' : '账号已存在',
+        });
+      } catch (markError) {
+        console.warn(LOG_PREFIX, `Failed to mark registration account unavailable after ${normalizedNodeId} error:`, getErrorMessage(markError));
+      }
+    }
     if (!(deferRetryableTransportError && doesNodeUseCompletionSignal(normalizedNodeId, errorState) && isRetryableContentScriptTransportError(err))) {
       await setNodeStatus(normalizedNodeId, 'failed');
       await addLog(`失败：${err.message}`, 'error', { nodeId: normalizedNodeId });
@@ -11981,6 +12575,18 @@ async function executeNodeAndWait(nodeId, delayAfter = 2000) {
       try {
         await validateStep5PostCompletion(signupTabId, completionPayload || {});
       } catch (step5ValidationError) {
+        if (isRegistrationIdentityConflictFailure(step5ValidationError)) {
+          try {
+            await markCurrentRegistrationAccountUnavailable(await getState(), {
+              logPrefix: '检测到当前注册邮箱不可再用',
+              level: 'warn',
+              reason: isStep8EmailInUseFailure(step5ValidationError) ? 'email_in_use' : 'user_already_exists',
+              reasonLabel: isStep8EmailInUseFailure(step5ValidationError) ? '邮箱已被使用' : '账号已存在',
+            });
+          } catch (markError) {
+            console.warn(LOG_PREFIX, 'Failed to mark registration account unavailable after step 5 validation error:', getErrorMessage(markError));
+          }
+        }
         await setNodeStatus(normalizedNodeId, 'failed');
         await addLog(`失败：${getErrorMessage(step5ValidationError)}`, 'error', { nodeId: normalizedNodeId });
         throw step5ValidationError;
@@ -12708,6 +13314,7 @@ const autoRunController = self.MultiPageBackgroundAutoRunController?.createAutoR
   getAutoRunStatusPayload,
   getErrorMessage,
   getFirstUnfinishedNodeId,
+  getNodeIdsForState,
   getPendingAutoRunTimerPlan,
   getRunningNodeIds,
   getState,
@@ -13170,6 +13777,18 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
     const startIndex = nodeIds.indexOf(currentStartNodeId);
     return startIndex < 0 || startIndex <= targetIndex;
   };
+  const shouldRunPendingNamedNode = async (nodeId) => {
+    if (!(await shouldRunNamedNode(nodeId))) {
+      return false;
+    }
+    const state = await getState();
+    const currentStatus = getNodeStatusForNode(state, nodeId);
+    if (isStepDoneStatus(currentStatus)) {
+      await addLog(`自动运行：节点 ${nodeId} 当前状态为 ${currentStatus}，将直接继续后续流程。`, 'info');
+      return false;
+    }
+    return true;
+  };
   const getPreviousNodeId = (nodeId, state = {}) => {
     const nodeIds = getAutoRunWorkflowNodeIds(state);
     const index = nodeIds.indexOf(nodeId);
@@ -13258,7 +13877,7 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
     await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：第 ${attemptRuns} 次尝试，阶段 1，打开官网并进入密码页 ===`, 'info');
   }
 
-  if (await shouldRunNamedNode('open-chatgpt')) {
+  if (await shouldRunPendingNamedNode('open-chatgpt')) {
     try {
       await executeNodeAndWaitWithAutoRunIdleLogWatchdog('open-chatgpt', getAutoRunNodeDelayMs('open-chatgpt'));
     } catch (err) {
@@ -13273,7 +13892,7 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
     }
   }
 
-  if (await shouldRunNamedNode('submit-signup-email')) {
+  if (await shouldRunPendingNamedNode('submit-signup-email')) {
     try {
       await runAutoNodeActionWithIdleLogWatchdog('submit-signup-email', async () => {
         if (resolvedSignupMethod === SIGNUP_METHOD_PHONE) {
@@ -13379,6 +13998,20 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
 
       const step = getDisplayStepForNode(nodeId, latestState);
       const nodeExecutionKey = getNodeExecutionKey(nodeId, latestState);
+      if (shouldRetrySmsOauthNonFreeTrialFromStep7(latestState, err)) {
+        plusCheckoutRestartCount += 1;
+        const checkoutCreateStep = getDisplayStepForNode('plus-checkout-create', latestState) || 7;
+        await addLog(
+          `节点 ${getNodeLabel(nodeId, latestState)}：先手机号注册 OAuth 检测到 Plus 今日应付金额非 0，将保留当前注册流程并直接回到第 ${checkoutCreateStep} 步 plus-checkout-create 重试（第 ${plusCheckoutRestartCount} 次）。原因：${getErrorMessage(err)}`,
+          'warn'
+        );
+        const checkoutResetAnchorNodeId = getPreviousNodeId('plus-checkout-create', latestState) || 'fill-profile';
+        await invalidateDownstreamAfterAutoRunNodeRestart(checkoutResetAnchorNodeId, {
+          logLabel: `先手机号注册 OAuth 非 0 金额后回到第 ${checkoutCreateStep} 步 plus-checkout-create 重试（第 ${plusCheckoutRestartCount} 次）`,
+        });
+        nodeIndex = Math.max(0, getNodeIndex(await getState(), 'plus-checkout-create'));
+        continue;
+      }
       const isGpcCheckoutStep = normalizePlusPaymentMethodForRun(latestState?.plusPaymentMethod) === plusPaymentMethodGpcHelper
         || String(latestState?.plusCheckoutSource || '').trim() === plusPaymentMethodGpcHelper;
       if (isPlusCheckoutRestartStep(step, nodeExecutionKey, latestState)
@@ -13733,6 +14366,12 @@ const phoneVerificationHelpers = self.MultiPageBackgroundPhoneVerification?.crea
   DEFAULT_NEX_SMS_BASE_URL,
   DEFAULT_NEX_SMS_COUNTRY_ORDER,
   DEFAULT_NEX_SMS_SERVICE_CODE,
+  DEFAULT_SMSBOWER_BASE_URL,
+  DEFAULT_SMSBOWER_SERVICE_CODE,
+  DEFAULT_SMS_VERIFICATION_NUMBER_BASE_URL,
+  DEFAULT_SMS_VERIFICATION_NUMBER_SERVICE_CODE,
+  DEFAULT_SMSPOOL_BASE_URL,
+  DEFAULT_SMSPOOL_SERVICE_CODE,
   DEFAULT_HERO_SMS_BASE_URL,
   DEFAULT_HERO_SMS_REUSE_ENABLED,
   DEFAULT_PHONE_CODE_WAIT_SECONDS,
@@ -13780,6 +14419,11 @@ const phoneVerificationHelpers = self.MultiPageBackgroundPhoneVerification?.crea
   sleepWithStop,
   throwIfStopped,
   createFiveSimProvider: self.PhoneSmsFiveSimProvider?.createProvider,
+  createNexSmsProvider: self.PhoneSmsNexSmsProvider?.createProvider,
+  createSmsBowerProvider: self.PhoneSmsBowerProvider?.createProvider,
+  createSmsVerificationNumberProvider: self.PhoneSmsVerificationNumberProvider?.createProvider,
+  createGrizzlySmsProvider: self.PhoneSmsGrizzlySmsProvider?.createProvider,
+  createSmsPoolProvider: self.PhoneSmsSmsPoolProvider?.createProvider || self.PhoneSmsPoolProvider?.createProvider,
 });
 const step1Executor = self.MultiPageBackgroundStep1?.createStep1Executor({
   addLog,
@@ -14076,6 +14720,7 @@ const step10Executor = self.MultiPageBackgroundStep10?.createStep10Executor({
   completeNodeFromBackground,
   createLocalCliProxyApi: self.MultiPageBackgroundLocalCliProxyApi?.createLocalCliProxyApi,
   ensureContentScriptReadyOnTab,
+  getState,
   getPanelMode,
   getTabId,
   isLocalhostOAuthCallbackUrl,
@@ -14189,6 +14834,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
     plusPaymentMethod: normalizePlusPaymentMethod(state?.plusPaymentMethod),
   }),
   exportSettingsBundle,
+  ensureContentScriptReadyOnTabUntilStopped,
   fetchHostedCheckoutVerificationCodeManually: (...args) => plusCheckoutCreateExecutor.fetchHostedCheckoutVerificationCodeManually(...args),
   testCheckoutConversionProxy: (...args) => plusCheckoutCreateExecutor.testCheckoutConversionProxy(...args),
   fetchGeneratedEmail,
@@ -14257,7 +14903,9 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   resetState,
   resumeAutoRun,
   scheduleAutoRun,
+  sendTabMessageUntilStopped,
   selectLuckmailPurchase,
+  sleepWithStop,
   switchIpProxy: null,
   changeIpProxyExit: null,
   setCurrentPayPalAccount,
@@ -14282,6 +14930,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   skipNode,
   startContributionFlow: (...args) => contributionOAuthManager?.startContributionFlow?.(...args),
   startAutoRunLoop,
+  waitForTabCompleteUntilStopped,
   pollContributionStatus: (...args) => contributionOAuthManager?.pollContributionStatus?.(...args),
   syncHotmailAccounts,
   syncPayPalAccounts,
@@ -14335,6 +14984,7 @@ const normalStepRegistry = buildStepRegistry(NORMAL_STEP_DEFINITIONS);
 const normalPhoneStepRegistry = buildStepRegistry(NORMAL_PHONE_STEP_DEFINITIONS);
 const normalPhoneBoundEmailReloginStepRegistry = buildStepRegistry(NORMAL_PHONE_BOUND_EMAIL_RELOGIN_STEP_DEFINITIONS);
 const plusPayPalStepRegistry = buildStepRegistry(PLUS_PAYPAL_STEP_DEFINITIONS);
+const plusPayPalSmsOauthStepRegistry = buildStepRegistry(PLUS_PAYPAL_SMS_OAUTH_STEP_DEFINITIONS);
 const plusPayPalPhoneStepRegistry = buildStepRegistry(PLUS_PAYPAL_PHONE_STEP_DEFINITIONS);
 const plusPayPalPhoneBoundEmailReloginStepRegistry = buildStepRegistry(PLUS_PAYPAL_PHONE_BOUND_EMAIL_RELOGIN_STEP_DEFINITIONS);
 const plusPayPalSub2ApiSessionStepRegistry = buildStepRegistry(PLUS_PAYPAL_SUB2API_SESSION_STEP_DEFINITIONS);
@@ -14372,6 +15022,9 @@ function getStepRegistryForState(state = {}) {
   const plusAccountAccessStrategy = signupMethod === SIGNUP_METHOD_PHONE
     ? PLUS_ACCOUNT_ACCESS_STRATEGY_OAUTH
     : normalizePlusAccountAccessStrategyForState(state);
+  if (paymentMethod === PLUS_PAYMENT_METHOD_PAYPAL && normalizePlusAccountAccessStrategyForState(state) === PLUS_ACCOUNT_ACCESS_STRATEGY_SMS_OAUTH) {
+    return plusPayPalSmsOauthStepRegistry;
+  }
   if (paymentMethod === PLUS_PAYMENT_METHOD_GPC_HELPER) {
     if (plusAccountAccessStrategy === PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION) {
       return plusGpcSub2ApiSessionStepRegistry;
@@ -14440,8 +15093,8 @@ async function ensureSignupPostEmailPageReadyInTab(tabId, step = 2, options = {}
   return signupFlowHelpers.ensureSignupPostEmailPageReadyInTab(tabId, step, options);
 }
 
-async function resolveSignupEmailForFlow(state) {
-  return signupFlowHelpers.resolveSignupEmailForFlow(state);
+async function resolveSignupEmailForFlow(state, options = {}) {
+  return signupFlowHelpers.resolveSignupEmailForFlow(state, options);
 }
 
 // ============================================================
@@ -15024,13 +15677,43 @@ async function recoverStep5SubmitRetryPageOnTab(options = {}) {
   return result || {};
 }
 
+async function skipCreateAccountEnrollPasskeyOnTab(options = {}) {
+  const result = await sendToContentScriptResilient(
+    'signup-page',
+    {
+      type: 'SKIP_CREATE_ACCOUNT_ENROLL_PASSKEY',
+      source: 'background',
+      payload: {
+        timeoutMs: options.timeoutMs ?? 15000,
+        settleMs: options.settleMs ?? 1200,
+      },
+    },
+    {
+      timeoutMs: options.timeoutMs ?? 18000,
+      retryDelayMs: options.retryDelayMs ?? 600,
+      responseTimeoutMs: options.responseTimeoutMs ?? (options.timeoutMs ?? 18000),
+      logMessage: options.logMessage || '步骤 5：通行密钥页正在等待“跳过”按钮重新就绪...',
+      logStep: 5,
+      logStepKey: options.logStepKey || 'fill-profile',
+    }
+  );
+
+  if (result?.error) {
+    throw new Error(result.error);
+  }
+
+  return result || {};
+}
+
 async function validateStep5PostCompletion(tabId, completionPayload = {}) {
   if (!Number.isInteger(tabId)) {
     throw new Error('步骤 5：缺少有效的资料页标签页，无法确认提交后的最终状态。');
   }
 
   const maxAuthRetryRecoveries = Math.max(1, Number(completionPayload?.maxAuthRetryRecoveries) || 2);
+  const maxPasskeySkipAttempts = Math.max(1, Number(completionPayload?.maxPasskeySkipAttempts) || 2);
   let authRetryRecoveryCount = 0;
+  let passkeySkipCount = 0;
 
   while (true) {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
@@ -15069,6 +15752,30 @@ async function validateStep5PostCompletion(tabId, completionPayload = {}) {
         timeoutMs: 15000,
         retryDelayMs: 600,
         logMessage: '步骤 5：资料提交后的认证重试页正在恢复，等待“重试”按钮重新就绪...',
+      });
+      await waitForTabStableComplete(tabId, {
+        timeoutMs: 30000,
+        retryDelayMs: 300,
+        stableMs: 1000,
+        initialDelayMs: 300,
+      }).catch(() => null);
+      continue;
+    }
+
+    if (pageState.passkeyEnrollPage) {
+      if (passkeySkipCount >= maxPasskeySkipAttempts) {
+        throw new Error(`步骤 5：资料提交后连续进入通行密钥页 ${maxPasskeySkipAttempts} 次，页面仍未继续。URL: ${pageState.url || currentUrl || 'unknown'}`);
+      }
+      passkeySkipCount += 1;
+      await addLog(`步骤 5：提交完成信号后检测到通行密钥页，正在自动点击“跳过”（${passkeySkipCount}/${maxPasskeySkipAttempts}）...`, 'warn', {
+        step: 5,
+        stepKey: 'fill-profile',
+      });
+      await skipCreateAccountEnrollPasskeyOnTab({
+        timeoutMs: 15000,
+        settleMs: 1200,
+        retryDelayMs: 600,
+        logMessage: '步骤 5：通行密钥页已打开，正在等待“跳过”按钮重新就绪...',
       });
       await waitForTabStableComplete(tabId, {
         timeoutMs: 30000,

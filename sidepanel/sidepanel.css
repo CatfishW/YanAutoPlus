@@ -1147,6 +1147,30 @@ header {
   min-width: 0;
 }
 
+.hosted-checkout-resend-settings-inline {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  row-gap: 6px;
+}
+
+#row-hosted-checkout-resend-settings > .data-label {
+  width: 76px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.hosted-checkout-setting-field,
+.hosted-checkout-setting-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.hosted-checkout-setting-toggle .toggle-switch {
+  flex: 0 0 auto;
+}
+
 .plus-checkout-conversion-proxy-test-inline {
   flex: 1;
   min-width: 0;
@@ -1540,6 +1564,15 @@ header {
   justify-content: flex-end;
 }
 
+.hosted-sms-pool-import-actions {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.hosted-sms-pool-auto-disable-toggle {
+  margin-left: auto;
+}
+
 .hosted-sms-pool-phone {
   display: flex;
   align-items: center;
@@ -1562,6 +1595,15 @@ header {
   color: var(--blue);
   font-size: 11px;
   font-weight: 600;
+}
+
+.luckmail-item.is-disabled {
+  opacity: 0.72;
+}
+
+.hosted-sms-pool-disabled-reason {
+  color: var(--red);
+  font-size: 11px;
 }
 
 .luckmail-tag {
@@ -2179,6 +2221,27 @@ header {
   white-space: nowrap;
 }
 
+.auto-run-retry-setting-pair {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.auto-run-retry-setting-pair .setting-group-primary {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.auto-run-retry-setting-pair .auto-run-retry-non-free-trial-setting,
+.auto-run-retry-setting-pair .auto-run-retry-paypal-callback-setting {
+  flex: 0 0 auto;
+}
+
+.auto-run-retry-setting-pair .auto-step-delay-setting {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
 .auto-run-delay-setting {
   margin-left: auto !important;
 }
@@ -2728,6 +2791,15 @@ header {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  gap: 8px;
+}
+
+.steps-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
 }
 
 .section-label {
@@ -2747,6 +2819,71 @@ header {
   padding: 2px 8px;
   border-radius: 10px;
   border: 1px solid var(--border);
+}
+
+.prestart-skip-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(8, 145, 178, 0.06));
+}
+
+.prestart-skip-label {
+  flex: 0 0 auto;
+  padding-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+.prestart-skip-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.prestart-skip-chip {
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.prestart-skip-chip:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.42);
+  color: var(--blue);
+}
+
+.prestart-skip-chip.active {
+  border-color: rgba(37, 99, 235, 0.55);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.prestart-skip-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.prestart-skip-summary {
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .steps-list {

@@ -6,12 +6,20 @@
   const PROVIDER_FIVE_SIM = '5sim';
   const PROVIDER_SMSPOOL = 'smspool';
   const PROVIDER_NEXSMS = 'nexsms';
+  const PROVIDER_SMSBOWER = 'smsbower';
+  const PROVIDER_SMS_VERIFICATION_NUMBER = 'sms-verification-number';
+  const PROVIDER_GRIZZLYSMS = 'grizzlysms';
+  const PROVIDER_CHATGPT_API = 'chatgpt-api';
   const DEFAULT_PROVIDER = PROVIDER_SMSPOOL;
   const DEFAULT_PROVIDER_ORDER = Object.freeze([
     PROVIDER_SMSPOOL,
     PROVIDER_HERO_SMS,
     PROVIDER_FIVE_SIM,
     PROVIDER_NEXSMS,
+    PROVIDER_SMSBOWER,
+    PROVIDER_SMS_VERIFICATION_NUMBER,
+    PROVIDER_GRIZZLYSMS,
+    PROVIDER_CHATGPT_API,
   ]);
   const PROVIDER_DEFINITIONS = Object.freeze({
     [PROVIDER_HERO_SMS]: Object.freeze({
@@ -33,6 +41,26 @@
       id: PROVIDER_NEXSMS,
       label: 'NexSMS',
       moduleKey: 'PhoneSmsNexSmsProvider',
+    }),
+    [PROVIDER_SMSBOWER]: Object.freeze({
+      id: PROVIDER_SMSBOWER,
+      label: 'SMSBower',
+      moduleKey: 'PhoneSmsBowerProvider',
+    }),
+    [PROVIDER_SMS_VERIFICATION_NUMBER]: Object.freeze({
+      id: PROVIDER_SMS_VERIFICATION_NUMBER,
+      label: 'SMS Verification Number',
+      moduleKey: 'PhoneSmsVerificationNumberProvider',
+    }),
+    [PROVIDER_GRIZZLYSMS]: Object.freeze({
+      id: PROVIDER_GRIZZLYSMS,
+      label: 'GrizzlySMS',
+      moduleKey: 'PhoneSmsGrizzlySmsProvider',
+    }),
+    [PROVIDER_CHATGPT_API]: Object.freeze({
+      id: PROVIDER_CHATGPT_API,
+      label: 'ChatGPT API 接码',
+      moduleKey: 'PhoneSmsChatGptApiProvider',
     }),
   });
 
@@ -133,6 +161,10 @@
     PROVIDER_FIVE_SIM,
     PROVIDER_SMSPOOL,
     PROVIDER_NEXSMS,
+    PROVIDER_SMSBOWER,
+    PROVIDER_SMS_VERIFICATION_NUMBER,
+    PROVIDER_GRIZZLYSMS,
+    PROVIDER_CHATGPT_API,
     DEFAULT_PROVIDER,
     DEFAULT_PROVIDER_ORDER,
     PROVIDER_DEFINITIONS,
