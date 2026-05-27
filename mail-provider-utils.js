@@ -11,6 +11,7 @@
 })(typeof self !== 'undefined' ? self : globalThis, function createMailProviderUtils() {
   const HOTMAIL_PROVIDER = 'hotmail-api';
   const GMAIL_PROVIDER = 'gmail';
+  const DEFAULT_GMAIL_MAILBOX_URL = 'https://mail.google.com/mail/u/0/#inbox';
   const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
   const NETEASE_LIST_PATH = '/js6/main.jsp?df=mail163_letter#module=mbox.ListModule%7C%7B%22fid%22%3A1%2C%22order%22%3A%22date%22%2C%22desc%22%3Atrue%7D';
   const ICLOUD_TARGET_MAILBOX_TYPE_INBOX = 'icloud-inbox';
@@ -27,6 +28,7 @@
     const normalized = String(value || '').trim().toLowerCase();
     switch (normalized) {
       case HOTMAIL_PROVIDER:
+      case GMAIL_PROVIDER:
       case EDU_SUBTOKEN_MAIL_PROVIDER:
       case '163':
       case '163-vip':
@@ -56,6 +58,36 @@
     return ICLOUD_FORWARD_MAIL_PROVIDER_OPTIONS.map((option) => ({ ...option }));
   }
 
+  function normalizeGmailMailboxUrl(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return DEFAULT_GMAIL_MAILBOX_URL;
+    }
+    if (/^\d+$/.test(raw)) {
+      return `https://mail.google.com/mail/u/${raw}/#inbox`;
+    }
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+      return `https://mail.google.com/mail/u/${encodeURIComponent(raw)}/#inbox`;
+    }
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== 'https:' || parsed.hostname !== 'mail.google.com') {
+        return DEFAULT_GMAIL_MAILBOX_URL;
+      }
+      if (!/^\/mail\/u\/[^/]+\/?$/.test(parsed.pathname)) {
+        return DEFAULT_GMAIL_MAILBOX_URL;
+      }
+      const hash = parsed.hash && /^#(?:inbox|search\/[^#]+|all|sent|spam|trash|category\/[^#]+)$/i.test(parsed.hash)
+        ? parsed.hash
+        : '#inbox';
+      parsed.search = '';
+      parsed.hash = hash;
+      return parsed.toString();
+    } catch {
+      return DEFAULT_GMAIL_MAILBOX_URL;
+    }
+  }
+
   function getIcloudForwardMailConfig(provider = 'qq') {
     const normalizedProvider = normalizeIcloudForwardMailProvider(provider);
     if (normalizedProvider === GMAIL_PROVIDER) {
@@ -80,6 +112,15 @@
     }
     if (provider === EDU_SUBTOKEN_MAIL_PROVIDER) {
       return { provider: EDU_SUBTOKEN_MAIL_PROVIDER, label: 'Edu Subtoken Mail API' };
+    }
+    if (provider === GMAIL_PROVIDER) {
+      return {
+        source: 'gmail-mail',
+        url: normalizeGmailMailboxUrl(state.gmailMailboxUrl),
+        label: 'Gmail 邮箱',
+        inject: ['content/activation-utils.js', 'content/utils.js', 'content/gmail-mail.js'],
+        injectSource: 'gmail-mail',
+      };
     }
     if (provider === '163') {
       return {
@@ -124,6 +165,7 @@
   }
 
   return {
+    DEFAULT_GMAIL_MAILBOX_URL,
     EDU_SUBTOKEN_MAIL_PROVIDER,
     GMAIL_PROVIDER,
     HOTMAIL_PROVIDER,
@@ -132,6 +174,7 @@
     getMailProviderConfig,
     normalizeIcloudForwardMailProvider,
     normalizeIcloudTargetMailboxType,
+    normalizeGmailMailboxUrl,
     normalizeMailProvider,
   };
 });

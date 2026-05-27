@@ -59,6 +59,7 @@ const bundle = [
   extractFunction('normalizeEmailGenerator'),
   extractFunction('getEmailGeneratorLabel'),
   extractFunction('normalizeVerificationResendCount'),
+  extractFunction('normalizeIcloudAliasLabelPattern'),
   extractFunction('normalizePersistentSettingValue'),
   extractFunction('finalizeIcloudAliasAfterSuccessfulFlow'),
 ].join('\n');
@@ -66,11 +67,19 @@ const bundle = [
 function createApi(overrides = {}) {
   return new Function('overrides', `
 const HOTMAIL_PROVIDER = 'hotmail-api';
+const ICLOUD_PROVIDER = 'icloud';
+const GMAIL_PROVIDER = 'gmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+const EDU_SUBTOKEN_MAIL_GENERATOR = 'edu-subtoken-mail-api';
 const HOTMAIL_SERVICE_MODE_LOCAL = 'local';
+const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUDFLARE_TEMP_EMAIL_GENERATOR = 'cloudflare-temp-email';
+const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const CLOUD_MAIL_GENERATOR = 'cloudmail';
 const DEFAULT_LOCAL_CPA_STEP9_MODE = 'submit';
 const DEFAULT_HOTMAIL_REMOTE_BASE_URL = '';
 const DEFAULT_HOTMAIL_LOCAL_BASE_URL = 'http://127.0.0.1:17373';
+const DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN = 'YanAutoPlus {date}';
 const DEFAULT_VERIFICATION_RESEND_COUNT = 4;
 const VERIFICATION_RESEND_COUNT_MIN = 0;
 const VERIFICATION_RESEND_COUNT_MAX = 20;
@@ -191,6 +200,8 @@ test('normalizePersistentSettingValue handles icloud settings', () => {
   assert.equal(api.normalizePersistentSettingValue('icloudTargetMailboxType', 'wrong'), 'icloud-inbox');
   assert.equal(api.normalizePersistentSettingValue('icloudForwardMailProvider', 'GMAIL'), 'gmail');
   assert.equal(api.normalizePersistentSettingValue('icloudForwardMailProvider', 'unknown'), 'qq');
+  assert.equal(api.normalizePersistentSettingValue('icloudAliasLabelPattern', ' Apple Flow {date} '), 'Apple Flow {date}');
+  assert.equal(api.normalizePersistentSettingValue('icloudAliasLabelPattern', ''), 'YanAutoPlus {date}');
   assert.equal(api.normalizePersistentSettingValue('autoDeleteUsedIcloudAlias', 1), true);
   assert.equal(api.normalizePersistentSettingValue('verificationResendCount', '6'), 6);
   assert.equal(api.normalizePersistentSettingValue('verificationResendCount', 99), 20);

@@ -122,12 +122,15 @@ const IP_PROXY_PAGE_CONTEXT_BASELINE_TIMEOUT_MS = 6000;
 const IP_PROXY_DIAGNOSTICS_SUMMARY_MAX_ITEMS = 8;
 const IP_PROXY_GUARD_BLOCK_RULE_ID = 10991;
 const IP_PROXY_GUARD_REGEX = '^https?:\\/\\/([^\\/]+\\.)?(chatgpt\\.com|openai\\.com)(\\/|$)';
+const IP_PROXY_CLASH_US_REGION = 'US';
+const IP_PROXY_CLASH_CONTROLLER_DEFAULT_PORTS = [9090, 9097, 9093, 9095];
+const IP_PROXY_CLASH_CONTROLLER_TIMEOUT_MS = 1400;
 
 function normalizeIpProxyProviderValue(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
-  const enabledValues = Array.isArray(globalThis.IP_PROXY_ENABLED_SERVICE_VALUES)
-    ? globalThis.IP_PROXY_ENABLED_SERVICE_VALUES
-    : [];
+  const enabledValues = (typeof IP_PROXY_ENABLED_SERVICE_VALUES !== 'undefined' && Array.isArray(IP_PROXY_ENABLED_SERVICE_VALUES))
+    ? IP_PROXY_ENABLED_SERVICE_VALUES
+    : (Array.isArray(globalThis.IP_PROXY_ENABLED_SERVICE_VALUES) ? globalThis.IP_PROXY_ENABLED_SERVICE_VALUES : []);
   if (enabledValues.includes(normalized)) {
     return normalized;
   }
@@ -639,6 +642,8 @@ function normalizeIpProxyServiceProfile(rawValue = {}) {
   const raw = (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue))
     ? rawValue
     : {};
+  const service = normalizeIpProxyProviderValue(raw.service || raw.provider || raw.ipProxyService || '');
+  const isClash = service === 'clash';
   const normalizeAutoSyncInterval = (value = '', fallback = 15) => {
     const rawValue = String(value ?? '').trim();
     if (!rawValue) {
@@ -659,9 +664,9 @@ function normalizeIpProxyServiceProfile(rawValue = {}) {
     poolTargetCount: normalizeIpProxyPoolTargetCount(raw.poolTargetCount || '', 20),
     autoSyncEnabled: Boolean(raw.autoSyncEnabled),
     autoSyncIntervalMinutes: normalizeAutoSyncInterval(raw.autoSyncIntervalMinutes, 15),
-    host: String(raw.host || '').trim(),
-    port: String(normalizeIpProxyPort(raw.port || '') || ''),
-    protocol: normalizeIpProxyProtocol(raw.protocol),
+    host: String(raw.host || (isClash && typeof DEFAULT_CLASH_PROXY_HOST !== 'undefined' ? DEFAULT_CLASH_PROXY_HOST : '')).trim(),
+    port: String(normalizeIpProxyPort(raw.port || (isClash && typeof DEFAULT_CLASH_PROXY_PORT !== 'undefined' ? DEFAULT_CLASH_PROXY_PORT : '')) || ''),
+    protocol: normalizeIpProxyProtocol(raw.protocol || (isClash && typeof DEFAULT_CLASH_PROXY_PROTOCOL !== 'undefined' ? DEFAULT_CLASH_PROXY_PROTOCOL : '')),
     username: String(raw.username || '').trim(),
     password: String(raw.password || ''),
     region: String(raw.region || '').trim(),
@@ -696,10 +701,10 @@ function normalizeIpProxyServiceProfiles(rawValue = {}, fallbackState = {}) {
   IP_PROXY_SERVICE_VALUES.forEach((service) => {
     const serviceRaw = raw[service];
     if (serviceRaw && typeof serviceRaw === 'object' && !Array.isArray(serviceRaw)) {
-      result[service] = normalizeIpProxyServiceProfile(serviceRaw);
+      result[service] = normalizeIpProxyServiceProfile({ service, ...serviceRaw });
       return;
     }
-    result[service] = normalizeIpProxyServiceProfile(fallbackProfile);
+    result[service] = normalizeIpProxyServiceProfile({ service, ...fallbackProfile });
   });
   return result;
 }
@@ -1112,6 +1117,9 @@ function getAccountModeProxyPoolFromState(state = {}, provider = DEFAULT_IP_PROX
     })) {
       nextEntry.region = configuredRegion;
     }
+    if (normalizedProvider === 'clash' && !String(nextEntry.region || '').trim()) {
+      nextEntry.region = IP_PROXY_CLASH_US_REGION;
+    }
     return nextEntry;
   });
 }
@@ -1325,6 +1333,7 @@ function buildIpProxyRoutingStatePatch(status = {}) {
   const host = String(status?.host || '').trim();
   const port = normalizeIpProxyPort(status?.port);
   const region = String(status?.region || '').trim();
+  const clashNode = String(status?.clashNode || status?.clashUsNode || '').trim();
   const hasAuth = Boolean(status?.hasAuth);
   const applied = Boolean(status?.applied);
   const reason = String(status?.reason || (applied ? 'applied' : 'disabled')).trim().toLowerCase();
@@ -1343,6 +1352,7 @@ function buildIpProxyRoutingStatePatch(status = {}) {
     ipProxyAppliedHost: host,
     ipProxyAppliedPort: port,
     ipProxyAppliedRegion: region,
+    ipProxyAppliedClashNode: clashNode,
     ipProxyAppliedHasAuth: hasAuth,
     ipProxyAppliedProvider: provider,
     ipProxyAppliedError: error,
@@ -1412,6 +1422,393 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = IP_PROXY_FETCH_TI
   } finally {
     clearTimeout(timer);
   }
+}
+
+function normalizeClashControllerBaseUrl(value = '') {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) {
+    return '';
+  }
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(rawValue)
+    ? rawValue
+    : `http://${rawValue}`;
+  try {
+    const parsed = new URL(withProtocol);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return '';
+    }
+    parsed.hash = '';
+    parsed.search = '';
+    parsed.pathname = parsed.pathname.replace(/\/+$/g, '');
+    const path = parsed.pathname === '/' ? '' : parsed.pathname;
+    return `${parsed.origin}${path}`.replace(/\/+$/g, '');
+  } catch {
+    return '';
+  }
+}
+
+function formatHostForClashControllerUrl(host = '') {
+  const normalizedHost = String(host || '').trim();
+  if (!normalizedHost) {
+    return '127.0.0.1';
+  }
+  if (normalizedHost.includes(':') && !normalizedHost.startsWith('[')) {
+    return `[${normalizedHost}]`;
+  }
+  return normalizedHost;
+}
+
+function isLoopbackClashProxyHost(host = '') {
+  const normalizedHost = String(host || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return !normalizedHost
+    || normalizedHost === 'localhost'
+    || normalizedHost === '127.0.0.1'
+    || normalizedHost === '::1'
+    || normalizedHost === '0.0.0.0';
+}
+
+function pushUniqueClashControllerUrl(urls, value = '') {
+  const normalized = normalizeClashControllerBaseUrl(value);
+  if (normalized && !urls.includes(normalized)) {
+    urls.push(normalized);
+  }
+}
+
+function resolveClashControllerCandidateUrls(state = {}, entry = {}) {
+  const urls = [];
+  [
+    state?.ipProxyClashControllerUrl,
+    state?.clashControllerUrl,
+    state?.mihomoControllerUrl,
+  ].forEach((candidate) => pushUniqueClashControllerUrl(urls, candidate));
+
+  const configuredHost = String(
+    entry?.host
+    || state?.ipProxyHost
+    || (typeof DEFAULT_CLASH_PROXY_HOST !== 'undefined' ? DEFAULT_CLASH_PROXY_HOST : '127.0.0.1')
+    || '127.0.0.1'
+  ).trim();
+  const hostCandidates = [];
+  const appendHost = (host) => {
+    const normalized = String(host || '').trim();
+    const key = normalized.toLowerCase();
+    if (normalized && !hostCandidates.some((item) => item.toLowerCase() === key)) {
+      hostCandidates.push(normalized);
+    }
+  };
+  appendHost(isLoopbackClashProxyHost(configuredHost) ? '127.0.0.1' : configuredHost);
+  appendHost('localhost');
+  if (!isLoopbackClashProxyHost(configuredHost)) {
+    appendHost('127.0.0.1');
+  }
+
+  const ports = Array.isArray(IP_PROXY_CLASH_CONTROLLER_DEFAULT_PORTS)
+    ? IP_PROXY_CLASH_CONTROLLER_DEFAULT_PORTS
+    : [9090, 9097];
+  hostCandidates.forEach((host) => {
+    ports.forEach((port) => {
+      const normalizedPort = normalizeIpProxyPort(port);
+      if (normalizedPort) {
+        pushUniqueClashControllerUrl(urls, `http://${formatHostForClashControllerUrl(host)}:${normalizedPort}`);
+      }
+    });
+  });
+  return urls;
+}
+
+function resolveClashControllerSecret(state = {}) {
+  return String(
+    state?.ipProxyClashControllerSecret
+    || state?.clashControllerSecret
+    || state?.mihomoControllerSecret
+    || ''
+  ).trim();
+}
+
+function buildClashControllerHeaders(secret = '', hasBody = false) {
+  const headers = {
+    Accept: 'application/json, text/plain, */*',
+  };
+  if (hasBody) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const controllerSecret = String(secret || '').trim();
+  if (controllerSecret) {
+    headers.Authorization = `Bearer ${controllerSecret}`;
+  }
+  return headers;
+}
+
+async function requestClashController(baseUrl = '', path = '/', options = {}) {
+  const normalizedBaseUrl = normalizeClashControllerBaseUrl(baseUrl);
+  if (!normalizedBaseUrl) {
+    throw new Error('Clash controller URL invalid');
+  }
+  const method = String(options?.method || 'GET').trim().toUpperCase() || 'GET';
+  const body = options?.body === undefined ? null : options.body;
+  const response = await fetchWithTimeout(`${normalizedBaseUrl}${path}`, {
+    method,
+    cache: 'no-store',
+    headers: buildClashControllerHeaders(options?.secret, body !== null),
+    ...(body !== null ? { body: JSON.stringify(body) } : {}),
+  }, Number(options?.timeoutMs) || IP_PROXY_CLASH_CONTROLLER_TIMEOUT_MS);
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    const suffix = text ? `: ${String(text).slice(0, 160)}` : '';
+    throw new Error(`HTTP ${response.status}${suffix}`);
+  }
+  if (method === 'PUT' || method === 'PATCH' || response.status === 204) {
+    return {};
+  }
+  const rawText = await response.text();
+  if (!rawText) {
+    return {};
+  }
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return {};
+  }
+}
+
+function normalizeClashProxyName(value = '') {
+  return String(value || '').trim();
+}
+
+function isClashUsNodeName(value = '') {
+  const text = normalizeClashProxyName(value);
+  if (!text) {
+    return false;
+  }
+  if (/(🇺🇸|美国|美國|美区|美區|美西|美东|美東|西美|东美|東美|北美|洛杉矶|洛杉磯|纽约|紐約|西雅图|西雅圖|硅谷|矽谷|圣何塞|聖何西|聖荷西)/i.test(text)) {
+    return true;
+  }
+  if (/(united[\s._-]*states|america|american|los[\s._-]*angeles|san[\s._-]*(jose|francisco)|silicon[\s._-]*valley|seattle|new[\s._-]*york|ashburn|virginia|dallas|chicago|fremont|santa[\s._-]*clara|california|oregon|portland|phoenix|denver|atlanta|miami|las[\s._-]*vegas|washington)/i.test(text)) {
+    return true;
+  }
+  return /(^|[^a-z])u\.?s\.?a?(\d+|[^a-z]|$)/i.test(text);
+}
+
+function getClashProxyMapFromPayload(payload = {}) {
+  const rawProxies = payload?.proxies && typeof payload.proxies === 'object'
+    ? payload.proxies
+    : {};
+  const proxies = {};
+  Object.entries(rawProxies).forEach(([name, proxy]) => {
+    const normalizedName = normalizeClashProxyName(name);
+    if (normalizedName && proxy && typeof proxy === 'object') {
+      proxies[normalizedName] = proxy;
+    }
+  });
+  return proxies;
+}
+
+function getClashProxyType(proxy = {}) {
+  return String(proxy?.type || proxy?.proxyType || '').trim().toLowerCase();
+}
+
+function isClashProxyGroup(proxy = {}) {
+  return Boolean(proxy && typeof proxy === 'object' && Array.isArray(proxy.all) && proxy.all.length > 0);
+}
+
+function isClashSelectableProxyGroup(proxy = {}) {
+  if (!isClashProxyGroup(proxy)) {
+    return false;
+  }
+  const type = getClashProxyType(proxy);
+  return !type || /select|selector|urltest|url-test|fallback|loadbalance|load-balance|relay/.test(type);
+}
+
+function shouldSkipClashGroupForUsSelection(groupName = '') {
+  const name = normalizeClashProxyName(groupName);
+  if (!name || isClashUsNodeName(name)) {
+    return false;
+  }
+  return /(direct|reject|block|广告|攔截|拦截|国内|國內|大陆|大陸|中国|中國|局域|lan|private|bypass)/i.test(name);
+}
+
+function pickClashUsChoice(choices = [], currentChoice = '') {
+  const normalizedChoices = choices.map(normalizeClashProxyName).filter(Boolean);
+  const current = normalizeClashProxyName(currentChoice);
+  if (current && normalizedChoices.includes(current) && isClashUsNodeName(current)) {
+    return current;
+  }
+  const usChoices = normalizedChoices.filter((choice) => isClashUsNodeName(choice));
+  if (!usChoices.length) {
+    return '';
+  }
+  const index = Math.floor(Math.random() * usChoices.length);
+  return usChoices[index] || usChoices[0] || '';
+}
+
+function resolveClashUsChoiceForGroup(groupName = '', proxies = {}, visited = new Set()) {
+  const normalizedGroupName = normalizeClashProxyName(groupName);
+  if (!normalizedGroupName || visited.has(normalizedGroupName)) {
+    return '';
+  }
+  visited.add(normalizedGroupName);
+  const group = proxies[normalizedGroupName];
+  if (!isClashProxyGroup(group)) {
+    return '';
+  }
+  const choices = group.all.map(normalizeClashProxyName).filter(Boolean);
+  const directChoice = pickClashUsChoice(choices, group.now);
+  if (directChoice) {
+    return directChoice;
+  }
+  for (const choice of choices) {
+    const child = proxies[choice];
+    if (!isClashProxyGroup(child)) {
+      continue;
+    }
+    const childChoice = resolveClashUsChoiceForGroup(choice, proxies, visited);
+    if (childChoice) {
+      return choice;
+    }
+  }
+  return '';
+}
+
+function getClashGroupPriority(groupName = '') {
+  const name = normalizeClashProxyName(groupName);
+  if (/^global$/i.test(name)) {
+    return 0;
+  }
+  if (/(openai|chatgpt|paypal|stripe|ai|auth)/i.test(name)) {
+    return 1;
+  }
+  if (/(global|proxy|select|节点|節點|选择|選擇|代理|国外|國外|海外|auto|自动|自動|manual|手动|手動|fallback)/i.test(name)) {
+    return 2;
+  }
+  return 5;
+}
+
+function buildClashUsSelectionPlan(payload = {}) {
+  const proxies = getClashProxyMapFromPayload(payload);
+  const groupNames = Object.keys(proxies)
+    .filter((name) => isClashSelectableProxyGroup(proxies[name]))
+    .filter((name) => !shouldSkipClashGroupForUsSelection(name))
+    .sort((left, right) => {
+      const priorityDelta = getClashGroupPriority(left) - getClashGroupPriority(right);
+      return priorityDelta || left.localeCompare(right);
+    });
+
+  const selections = [];
+  const selectedNodeNames = new Set();
+  groupNames.forEach((groupName) => {
+    const group = proxies[groupName];
+    const choiceName = resolveClashUsChoiceForGroup(groupName, proxies, new Set());
+    if (!choiceName) {
+      return;
+    }
+    selectedNodeNames.add(choiceName);
+    if (normalizeClashProxyName(group?.now) !== choiceName) {
+      selections.push({ groupName, choiceName });
+    }
+  });
+
+  return {
+    groupCount: groupNames.length,
+    selections,
+    selectedNodeNames: [...selectedNodeNames],
+  };
+}
+
+function summarizeClashControllerErrors(errors = []) {
+  return (Array.isArray(errors) ? errors : [])
+    .map((error) => String(error || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join('；');
+}
+
+async function ensureClashUsesUsNode(state = {}, entry = {}, options = {}) {
+  const provider = normalizeIpProxyProviderValue(entry?.provider || state?.ipProxyService || DEFAULT_IP_PROXY_SERVICE);
+  if (provider !== 'clash') {
+    return null;
+  }
+  const controllerUrls = resolveClashControllerCandidateUrls(state, entry);
+  const secret = resolveClashControllerSecret(state);
+  const timeoutMs = Number(options?.timeoutMs) || IP_PROXY_CLASH_CONTROLLER_TIMEOUT_MS;
+  const controllerErrors = [];
+
+  for (const controllerUrl of controllerUrls) {
+    try {
+      const payload = await requestClashController(controllerUrl, '/proxies', {
+        secret,
+        timeoutMs,
+      });
+      const plan = buildClashUsSelectionPlan(payload);
+      if (!plan.selectedNodeNames.length) {
+        return {
+          ok: false,
+          region: IP_PROXY_CLASH_US_REGION,
+          warning: 'Clash 控制器已连接，但当前配置没有识别到美国节点；未切换到非美国节点。',
+        };
+      }
+
+      const changedGroups = [];
+      const failedGroups = [];
+      for (const selection of plan.selections) {
+        try {
+          await requestClashController(
+            controllerUrl,
+            `/proxies/${encodeURIComponent(selection.groupName)}`,
+            {
+              method: 'PUT',
+              body: { name: selection.choiceName },
+              secret,
+              timeoutMs,
+            }
+          );
+          changedGroups.push(selection);
+        } catch (error) {
+          failedGroups.push(`${selection.groupName}: ${error?.message || String(error || 'failed')}`);
+        }
+      }
+
+      const clashNode = plan.selectedNodeNames[0] || '';
+      if (changedGroups.length || plan.selections.length === 0) {
+        if (typeof addLog === 'function') {
+          const changedSummary = changedGroups.length
+            ? `，已切换 ${changedGroups.length} 个策略组`
+            : '，当前策略组已是美国节点';
+          await addLog(`Clash：已限制为美国节点 ${clashNode}${changedSummary}。`, 'ok').catch(() => {});
+        }
+        return {
+          ok: true,
+          changed: changedGroups.length > 0,
+          region: IP_PROXY_CLASH_US_REGION,
+          clashNode,
+          controllerUrl,
+        };
+      }
+
+      const failureSummary = summarizeClashControllerErrors(failedGroups);
+      return {
+        ok: false,
+        region: IP_PROXY_CLASH_US_REGION,
+        clashNode,
+        warning: `Clash 控制器已连接并识别到美国节点 ${clashNode}，但策略组切换失败：${failureSummary || 'unknown'}`,
+      };
+    } catch (error) {
+      controllerErrors.push(`${controllerUrl}: ${error?.message || String(error || 'failed')}`);
+    }
+  }
+
+  const summary = summarizeClashControllerErrors(controllerErrors);
+  return {
+    ok: false,
+    region: IP_PROXY_CLASH_US_REGION,
+    warning: `Clash 控制器不可用，无法自动切换美国节点；已继续使用本地 Clash 端口，出口检测会按 US 校验。${summary ? ` 诊断：${summary}` : ''}`,
+  };
+}
+
+function mergeIpProxyWarnings(...warnings) {
+  return warnings
+    .map((warning) => String(warning || '').trim())
+    .filter(Boolean)
+    .join(' ');
 }
 
 function extractIpv4FromText(value = '') {
@@ -3310,6 +3707,7 @@ async function applyIpProxySettingsFromState(state = {}, options = {}) {
     forceRotateVariant: shouldForceDrain,
     allow711HostVariant: hasMultipleAccountEntries,
   });
+  let clashSelection = null;
   if (shouldForceDrain) {
     effectiveEntry = await maybeResolveProxyHostVariantForAuthSwitch(effectiveEntry, {
       force: true,
@@ -3318,6 +3716,12 @@ async function applyIpProxySettingsFromState(state = {}, options = {}) {
       // 单账号显式重绑仅使用 host 字面量变体，避免解析 IP 后链路不稳定。
       allow711ResolvedIp: hasMultipleAccountEntries,
     }).catch(() => effectiveEntry);
+  }
+  if (provider === 'clash') {
+    effectiveEntry = {
+      ...effectiveEntry,
+      region: IP_PROXY_CLASH_US_REGION,
+    };
   }
 
   const forceDirectAuthEntry = resolveIpProxyForceDirectAuthEntry(resolvedState, effectiveEntry);
@@ -3346,10 +3750,23 @@ async function applyIpProxySettingsFromState(state = {}, options = {}) {
     return status;
   }
 
+  if (provider === 'clash') {
+    clashSelection = await ensureClashUsesUsNode(resolvedState, effectiveEntry, {
+      timeoutMs: options?.clashControllerTimeoutMs || IP_PROXY_CLASH_CONTROLLER_TIMEOUT_MS,
+    }).catch((error) => ({
+      ok: false,
+      region: IP_PROXY_CLASH_US_REGION,
+      warning: `Clash 控制器调用异常，无法自动切换美国节点；已继续使用本地 Clash 端口，出口检测会按 US 校验。${error?.message || String(error || '')}`,
+    }));
+    if (clashSelection?.warning && typeof addLog === 'function') {
+      await addLog(clashSelection.warning, 'warn').catch(() => {});
+    }
+  }
+
   const entrySignature = buildIpProxyEntrySignature(effectiveEntry);
   const shouldResetNetworkState = Boolean(
     entrySignature
-    && entrySignature !== lastAppliedIpProxyEntrySignature
+    && (entrySignature !== lastAppliedIpProxyEntrySignature || clashSelection?.changed)
     && !options.skipExitProbe
     && options.resetNetworkState !== false
   );
@@ -3454,11 +3871,13 @@ async function applyIpProxySettingsFromState(state = {}, options = {}) {
     reason: 'applied',
     host: entry.host,
     port: entry.port,
-    region: entry.region,
+    region: provider === 'clash' ? IP_PROXY_CLASH_US_REGION : entry.region,
     username: String(entry.username || '').trim(),
     entrySource: resolveIpProxyAccountEntrySource(resolvedState, mode),
     hasAuth: Boolean(entry.username || entry.password),
     provider: normalizeIpProxyProviderValue(entry.provider || resolvedState?.ipProxyService),
+    clashNode: clashSelection?.clashNode || '',
+    warning: mergeIpProxyWarnings(clashSelection?.warning),
     error: '',
     exitDetecting: !options.skipExitProbe,
     exitIp: '',
@@ -3513,7 +3932,7 @@ async function applyIpProxySettingsFromState(state = {}, options = {}) {
     exitSource: String(exit?.source || '').trim().toLowerCase(),
     authDiagnostics: status?.hasAuth ? getIpProxyAuthDiagnosticsSummary() : '',
   };
-  const expectedRegion = String(entry?.region || '').trim();
+  const expectedRegion = String(status?.region || entry?.region || '').trim();
   let normalizedExitStatus = applyExitRegionExpectation(exitStatus, expectedRegion);
   normalizedExitStatus = applyExitBaselineExpectation(normalizedExitStatus);
   if (shouldVerifyIpProxyTargetReachability(normalizedExitStatus)) {

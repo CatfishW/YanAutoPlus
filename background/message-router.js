@@ -231,6 +231,14 @@
       preserveKeyFromState(updates, currentState, 'phonePreferredActivation');
     }
 
+    function runDetachedTask(label, task) {
+      Promise.resolve()
+        .then(task)
+        .catch((error) => {
+          console.warn(`[YanAutoPlus] ${label} failed:`, error?.message || error);
+        });
+    }
+
     function normalizePreStartSkippedNodeIds(value = [], state = {}) {
       const validNodeIds = typeof getNodeIdsForState === 'function'
         ? getNodeIdsForState(state)
@@ -1737,6 +1745,16 @@
             await setPersistentSettings({ emailPrefix: message.payload.emailPrefix });
             await setState({ emailPrefix: message.payload.emailPrefix });
           }
+          if (message.payload.gmailAliasPattern !== undefined) {
+            const gmailAliasPattern = String(message.payload.gmailAliasPattern || '').trim();
+            await setPersistentSettings({ gmailAliasPattern });
+            await setState({ gmailAliasPattern });
+          }
+          if (message.payload.gmailMailboxUrl !== undefined) {
+            const gmailMailboxUrl = String(message.payload.gmailMailboxUrl || '').trim();
+            await setPersistentSettings({ gmailMailboxUrl });
+            await setState({ gmailMailboxUrl });
+          }
           await executeNodeForManualChain(nodeId);
 
           const latestExecutionState = await getState();
@@ -1984,7 +2002,7 @@
             stateUpdates.currentNodeId = '';
           }
           await setState(stateUpdates);
-          const mergedState = await getState();
+          const mergedState = await getState({ includeAccountRunHistory: false });
           const hasIpProxyAutoSyncSettingChanged = (
             Object.prototype.hasOwnProperty.call(updates, 'ipProxyAutoSyncEnabled')
             || Object.prototype.hasOwnProperty.call(updates, 'ipProxyAutoSyncIntervalMinutes')
@@ -2025,8 +2043,8 @@
               error: error?.message || String(error || '代理应用失败'),
             }));
           }
-          if (Boolean(currentState?.contributionMode) && typeof setContributionMode === 'function') {
-            await setContributionMode(true);
+          if (Boolean(mergedState?.contributionMode) && typeof setContributionMode === 'function') {
+            runDetachedTask('SAVE_SETTING contribution mode resync', () => setContributionMode(true));
           }
           if (Object.keys(stateUpdates).length > 0 && typeof broadcastDataUpdate === 'function') {
             broadcastDataUpdate(stateUpdates);
@@ -2051,7 +2069,7 @@
             ok: true,
             modeValidation,
             proxyRouting,
-            state: await getState(),
+            state: mergedState,
           };
         }
 

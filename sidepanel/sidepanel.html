@@ -291,13 +291,13 @@
         <div class="data-inline setting-pair">
           <div class="setting-group setting-group-primary">
             <label class="toggle-switch" for="input-plus-mode-enabled" title="开启后使用 Plus Checkout 支付授权流程">
-              <input type="checkbox" id="input-plus-mode-enabled" checked disabled />
+              <input type="checkbox" id="input-plus-mode-enabled" checked />
               <span class="toggle-switch-track" aria-hidden="true">
                 <span class="toggle-switch-thumb"></span>
               </span>
             </label>
           </div>
-          <span class="setting-caption">已固定开启</span>
+          <span class="setting-caption" id="plus-mode-caption">开启后使用 Plus Checkout 支付授权流程</span>
         </div>
       </div>
       <div class="data-row" id="row-plus-payment-method" style="display:none;">
@@ -611,6 +611,8 @@
         <div class="data-inline">
           <select id="select-mail-provider" class="data-select">
             <option value="hotmail-api">Outlook/Hotmail 账号池</option>
+            <option value="gmail">Gmail 邮箱</option>
+            <option value="icloud">iCloud 隐私邮箱</option>
             <option value="cloudflare-temp-email">Cloudflare Temp Email</option>
             <option value="cloudmail">Cloud Mail</option>
             <option value="edu-subtoken-mail-api">Edu Subtoken Mail API</option>
@@ -732,6 +734,22 @@
         <div class="data-inline">
           <input type="text" id="input-email-prefix" class="data-input mail2925-base-input"
             placeholder="例如 yourname@example.com" />
+        </div>
+      </div>
+      <div class="data-row" id="row-gmail-alias-pattern" style="display:none;">
+        <span class="data-label">别名规则</span>
+        <div class="data-inline">
+          <input type="text" id="input-gmail-alias-pattern" class="data-input mono"
+            placeholder="例如 subtoken{auto} 或 subtoken-{random}" />
+          <span class="setting-caption">留空随机；{auto}/{n} 自增，{random} 随机</span>
+        </div>
+      </div>
+      <div class="data-row" id="row-gmail-mailbox-url" style="display:none;">
+        <span class="data-label">Gmail 收件箱</span>
+        <div class="data-inline">
+          <input type="text" id="input-gmail-mailbox-url" class="data-input mono"
+            placeholder="0 / 1 / name@gmail.com / https://mail.google.com/mail/u/1/#inbox" />
+          <span class="setting-caption">多账号时填写 Gmail 序号、邮箱或完整收件箱 URL</span>
         </div>
       </div>
       <div class="data-row" id="row-inbucket-host" style="display:none;">
@@ -1066,6 +1084,14 @@
           <span class="setting-caption">每个基邮箱默认最多 5 个 +tag 别名</span>
         </div>
       </div>
+      <div class="data-row" id="row-outlook-alias-pattern">
+        <span class="data-label">别名规则</span>
+        <div class="data-inline">
+          <input type="text" id="input-outlook-alias-pattern" class="data-input mono"
+            placeholder="PayPal{n} / subtoken{n} / yan-{random}" />
+          <span class="setting-caption">默认 PayPal{n}；支持 {n}/{auto}/{number}/{padded}/{random}</span>
+        </div>
+      </div>
       <div id="hotmail-form-shell" class="account-pool-form-shell" hidden>
         <div class="data-row">
           <span class="data-label">邮箱</span>
@@ -1308,6 +1334,11 @@
           <option value="always_new">始终创建新别名</option>
         </select>
       </div>
+      <div class="data-row" id="row-icloud-alias-label-pattern">
+        <span class="data-label">别名标签</span>
+        <input type="text" id="input-icloud-alias-label-pattern" class="data-input mono"
+          placeholder="YanAutoPlus {date}" />
+      </div>
       <div class="data-row">
         <span class="data-label">自动删除</span>
         <label class="option-toggle" for="checkbox-auto-delete-icloud">
@@ -1374,8 +1405,9 @@
             <div class="data-row" id="row-ip-proxy-service" style="display:none;">
               <span class="data-label">代理服务</span>
               <div class="data-inline">
-                <select id="select-ip-proxy-service" class="data-select" disabled>
+                <select id="select-ip-proxy-service" class="data-select">
                   <option value="711proxy">711Proxy（首版）</option>
+                  <option value="clash">Clash 动态全局代理</option>
                 </select>
                 <button id="btn-ip-proxy-service-login" class="btn btn-outline btn-sm data-inline-btn" type="button">
                   注册
@@ -1413,12 +1445,12 @@
                   </div>
                   <div class="data-row ip-proxy-column-row" id="row-ip-proxy-host" style="display:none;">
                     <span class="data-label">代理 Host</span>
-                    <input type="text" id="input-ip-proxy-host" class="data-input" placeholder="例如 global.rotgb.711proxy.com" />
+                    <input type="text" id="input-ip-proxy-host" class="data-input" placeholder="711Proxy: global.rotgb.711proxy.com / Clash: 127.0.0.1" />
                   </div>
                   <div class="data-row ip-proxy-column-row" id="row-ip-proxy-port" style="display:none;">
                     <span class="data-label">代理 Port</span>
                     <input type="number" id="input-ip-proxy-port" class="data-input" min="1" max="65535" step="1"
-                      placeholder="例如 10000" />
+                      placeholder="711Proxy: 10000 / Clash: 7890" />
                   </div>
                   <div class="data-row ip-proxy-column-row" id="row-ip-proxy-protocol" style="display:none;">
                     <span class="data-label">代理协议</span>

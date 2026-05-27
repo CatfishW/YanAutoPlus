@@ -144,6 +144,7 @@
       }
 
       const shouldRequestFreshCodeFirst = ![
+        'gmail',
         HOTMAIL_PROVIDER,
         LUCKMAIL_PROVIDER,
         CLOUDFLARE_TEMP_EMAIL_PROVIDER,

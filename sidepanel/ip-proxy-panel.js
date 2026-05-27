@@ -1,9 +1,11 @@
 // sidepanel/ip-proxy-panel.js — IP代理面板（轻量解耦）
 function normalizeIpProxyService(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
-  const enabledServices = Array.isArray(globalThis.IP_PROXY_ENABLED_SERVICES)
-    ? globalThis.IP_PROXY_ENABLED_SERVICES
-    : [DEFAULT_IP_PROXY_SERVICE];
+  const enabledServices = (typeof IP_PROXY_ENABLED_SERVICES !== 'undefined' && Array.isArray(IP_PROXY_ENABLED_SERVICES))
+    ? IP_PROXY_ENABLED_SERVICES
+    : (Array.isArray(globalThis.IP_PROXY_ENABLED_SERVICES)
+      ? globalThis.IP_PROXY_ENABLED_SERVICES
+      : [DEFAULT_IP_PROXY_SERVICE]);
   if (enabledServices.includes(normalized)) {
     return normalized;
   }
@@ -239,6 +241,8 @@ function normalizeIpProxyServiceProfile(rawValue = {}) {
   const raw = (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue))
     ? rawValue
     : {};
+  const service = normalizeIpProxyService(raw.service || raw.provider || raw.ipProxyService || '');
+  const isClash = service === 'clash';
   return {
     mode: normalizeIpProxyModeForCurrentRelease(raw.mode),
     apiUrl: String(raw.apiUrl || '').trim(),
@@ -248,9 +252,9 @@ function normalizeIpProxyServiceProfile(rawValue = {}) {
     poolTargetCount: normalizeIpProxyPoolTargetCount(raw.poolTargetCount || '', 20),
     autoSyncEnabled: Boolean(raw.autoSyncEnabled),
     autoSyncIntervalMinutes: String(Math.max(1, Math.min(1440, Number.parseInt(String(raw.autoSyncIntervalMinutes ?? '').trim(), 10) || 15))),
-    host: String(raw.host || '').trim(),
-    port: String(normalizeIpProxyPort(raw.port || '') || ''),
-    protocol: normalizeIpProxyProtocol(raw.protocol),
+    host: String(raw.host || (isClash ? DEFAULT_CLASH_PROXY_HOST : '')).trim(),
+    port: String(normalizeIpProxyPort(raw.port || (isClash ? DEFAULT_CLASH_PROXY_PORT : '')) || ''),
+    protocol: normalizeIpProxyProtocol(raw.protocol || (isClash ? DEFAULT_CLASH_PROXY_PROTOCOL : '')),
     username: String(raw.username || '').trim(),
     password: String(raw.password || ''),
     region: String(raw.region || '').trim(),
@@ -285,10 +289,10 @@ function normalizeIpProxyServiceProfiles(rawValue = {}, fallbackState = {}) {
   SUPPORTED_IP_PROXY_SERVICES.forEach((service) => {
     const serviceRaw = raw[service];
     if (serviceRaw && typeof serviceRaw === 'object' && !Array.isArray(serviceRaw)) {
-      result[service] = normalizeIpProxyServiceProfile(serviceRaw);
+      result[service] = normalizeIpProxyServiceProfile({ service, ...serviceRaw });
       return;
     }
-    result[service] = normalizeIpProxyServiceProfile(fallbackProfile);
+    result[service] = normalizeIpProxyServiceProfile({ service, ...fallbackProfile });
   });
   return result;
 }
@@ -955,9 +959,14 @@ function canChangeIpProxyExitWithCurrentSession(state = latestState) {
 
 function buildIpProxyActionHintText(options = {}) {
   const mode = normalizeIpProxyModeForCurrentRelease(options?.mode || DEFAULT_IP_PROXY_MODE);
+  const service = normalizeIpProxyService(options?.service || selectIpProxyService?.value || latestState?.ipProxyService || DEFAULT_IP_PROXY_SERVICE);
   const poolCount = Math.max(0, Number(options?.poolCount) || 0);
   const changeAvailable = Boolean(options?.changeAvailable);
   const dynamicPoolCount = poolCount > 0 ? poolCount : 1;
+
+  if (service === 'clash') {
+    return 'Clash：把 Chrome 流量交给本地 Clash 端口；动态/全局节点切换请在 Clash Verge 内控制，扩展负责应用与检测。';
+  }
 
   if (mode === 'api') {
     const nextPart = poolCount > 1
@@ -984,11 +993,14 @@ function setIpProxyCurrentDisplay(text = '', hasValue = false) {
 
 function formatIpProxyCurrentDisplay(state = latestState) {
   const mode = normalizeIpProxyModeForCurrentRelease(state?.ipProxyMode);
+  const service = normalizeIpProxyService(state?.ipProxyService || DEFAULT_IP_PROXY_SERVICE);
   if (mode === 'account') {
     const current = getIpProxyCurrentEntry(state);
     if (!current) {
       return {
-        text: '账号模式：请填写代理列表，或填写 Host / Port',
+        text: service === 'clash'
+          ? 'Clash：请填写本地 Host / Port，例如 127.0.0.1:7890'
+          : '账号模式：请填写代理列表，或填写 Host / Port',
         hasValue: false,
       };
     }
@@ -1040,19 +1052,35 @@ function buildIpProxyCurrentDisplayText(display = {}, runtimeStatus = {}) {
   return rawText;
 }
 
+function getIpProxyServiceLabel(service = '') {
+  const normalized = normalizeIpProxyService(service || DEFAULT_IP_PROXY_SERVICE);
+  if (normalized === 'clash') {
+    return 'Clash 动态全局代理';
+  }
+  if (normalized === '711proxy') {
+    return '711Proxy';
+  }
+  return normalized;
+}
+
 function formatIpProxyRuntimeStatus(state = latestState) {
   const enabled = Boolean(state?.ipProxyEnabled);
   const mode = normalizeIpProxyModeForCurrentRelease(state?.ipProxyMode);
+  const service = normalizeIpProxyService(state?.ipProxyService || DEFAULT_IP_PROXY_SERVICE);
+  const serviceLabel = getIpProxyServiceLabel(service);
+  const isClash = service === 'clash';
   const hasAccountListConfigured = mode === 'account'
     && normalizeIpProxyAccountList(state?.ipProxyAccountList || '').split('\n').filter(Boolean).length > 0;
   const accountSourceTag = mode === 'account'
-    ? (hasAccountListConfigured ? '（账号列表）' : '（固定账号）')
+    ? (isClash ? '（本地 Clash）' : (hasAccountListConfigured ? '（账号列表）' : '（固定账号）'))
     : '';
   const accountSourceDetail = mode === 'account'
     ? (
-      hasAccountListConfigured
+      isClash
+        ? '当前生效来源：本地 Clash 端口。扩展会尝试通过 Clash/Mihomo 控制器锁定美国节点；请保持本地端口与控制器可用。'
+        : (hasAccountListConfigured
         ? '当前生效来源：账号列表（固定账号字段已忽略）。'
-        : '当前生效来源：固定账号字段。'
+        : '当前生效来源：固定账号字段。')
     )
     : '';
   const activeEntry = getIpProxyCurrentEntry(state);
@@ -1082,6 +1110,7 @@ function formatIpProxyRuntimeStatus(state = latestState) {
   const authSuffix = hasAuth ? '（需要鉴权）' : '';
   const errorText = String(state?.ipProxyAppliedError || '').trim();
   const warningText = String(state?.ipProxyAppliedWarning || '').trim();
+  const clashNode = String(state?.ipProxyAppliedClashNode || '').trim();
   const exitIp = String(state?.ipProxyAppliedExitIp || '').trim();
   const exitRegion = String(state?.ipProxyAppliedExitRegion || '').trim();
   const exitDetecting = Boolean(state?.ipProxyAppliedExitDetecting);
@@ -1098,7 +1127,13 @@ function formatIpProxyRuntimeStatus(state = latestState) {
   const exitSummary = exitIp
     ? `${exitIp}${exitRegion ? ` [${exitRegion}]` : ''}${exitSourceSuffix}`
     : (exitDetecting ? '检测中...' : '未检测到');
-  const details = [accountSourceDetail, errorText, warningText, exitError]
+  const details = [
+    accountSourceDetail,
+    clashNode ? `Clash 美国节点：${clashNode}` : '',
+    errorText,
+    warningText,
+    exitError,
+  ]
     .map((item) => String(item || '').trim())
     .filter(Boolean)
     .join('\n');
@@ -1114,11 +1149,11 @@ function formatIpProxyRuntimeStatus(state = latestState) {
 
   if (applied) {
     const statusPrefix = endpointSummary
-      ? `当前代理：${endpointSummary}${accountSourceTag}`
-      : '当前代理：已启用';
-    const statusText = `${statusPrefix}；当前出口：${exitSummary}`;
+      ? `当前代理：${serviceLabel} ${endpointSummary}${accountSourceTag}`
+      : `当前代理：${serviceLabel} 已启用`;
+    const statusText = `${statusPrefix}；当前出口：${exitSummary}${clashNode ? `；Clash节点：${clashNode}` : ''}`;
     const briefWarning = warningText
-      ? '；地区校验未通过（详情可展开查看）'
+      ? '；有提示（详情可展开查看）'
       : '';
     return {
       stateClass: warningText ? 'state-warning' : 'state-applied',
@@ -1163,7 +1198,7 @@ function formatIpProxyRuntimeStatus(state = latestState) {
     };
   }
   if (reason === 'connectivity_failed') {
-    const prefix = endpointSummary ? `当前代理：${endpointSummary}${accountSourceTag}` : '当前代理：未知';
+    const prefix = endpointSummary ? `当前代理：${serviceLabel} ${endpointSummary}${accountSourceTag}` : `当前代理：${serviceLabel}`;
     const targetUnreachable = /真实目标|chatgpt\.com 不可达|target:page_context/i.test(errorText || details);
     const exitPart = exitIp ? `；当前出口：${exitSummary}` : '';
     return {
@@ -1262,6 +1297,7 @@ function updateIpProxyUI(state = latestState) {
   const isApiMode = mode === 'api' && apiModeAvailable;
   const isAccountMode = mode === 'account';
   const showSessionOptions = isAccountMode && service === '711proxy';
+  const isClash = service === 'clash';
   const hasAccountListConfigured = accountListAvailable && isAccountMode && hasCurrentInputAccountListEntries();
   const canOperate = !isAutoRunLockedPhase() && !isAutoRunScheduledPhase();
   const actionState = getIpProxyActionState();
@@ -1296,7 +1332,7 @@ function updateIpProxyUI(state = latestState) {
     rowIpProxyApiUrl.style.display = showSettings && apiModeAvailable && isApiMode ? '' : 'none';
   }
   if (rowIpProxyAccountList) {
-    rowIpProxyAccountList.style.display = showSettings && isAccountMode && accountListAvailable ? '' : 'none';
+    rowIpProxyAccountList.style.display = showSettings && isAccountMode && accountListAvailable && !isClash ? '' : 'none';
   }
   if (rowIpProxyAccountSessionPrefix) {
     rowIpProxyAccountSessionPrefix.style.display = showSettings && showSessionOptions ? '' : 'none';
@@ -1325,13 +1361,13 @@ function updateIpProxyUI(state = latestState) {
     rowIpProxyProtocol.style.display = showSettings ? '' : 'none';
   }
   if (rowIpProxyUsername) {
-    rowIpProxyUsername.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyUsername.style.display = showSettings && isAccountMode && !isClash ? '' : 'none';
   }
   if (rowIpProxyPassword) {
-    rowIpProxyPassword.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyPassword.style.display = showSettings && isAccountMode && !isClash ? '' : 'none';
   }
   if (rowIpProxyRegion) {
-    rowIpProxyRegion.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyRegion.style.display = showSettings && isAccountMode && !isClash ? '' : 'none';
   }
   if (rowIpProxyActions) {
     rowIpProxyActions.style.display = showSettings ? '' : 'none';
@@ -1347,7 +1383,7 @@ function updateIpProxyUI(state = latestState) {
   }
   if (selectIpProxyService) {
     selectIpProxyService.value = service;
-    selectIpProxyService.disabled = true;
+    selectIpProxyService.disabled = !enabled;
   }
   if (typeof updateIpProxyServiceLoginButtonState === 'function') {
     updateIpProxyServiceLoginButtonState({
@@ -1385,19 +1421,19 @@ function updateIpProxyUI(state = latestState) {
     selectIpProxyProtocol.disabled = !enabled || (isAccountMode && hasAccountListConfigured);
   }
   if (inputIpProxyUsername) {
-    inputIpProxyUsername.disabled = !enabled || !isAccountMode || hasAccountListConfigured;
+    inputIpProxyUsername.disabled = !enabled || !isAccountMode || hasAccountListConfigured || isClash;
   }
   if (inputIpProxyPassword) {
-    inputIpProxyPassword.disabled = !enabled || !isAccountMode || hasAccountListConfigured;
+    inputIpProxyPassword.disabled = !enabled || !isAccountMode || hasAccountListConfigured || isClash;
   }
   if (btnToggleIpProxyUsername) {
-    btnToggleIpProxyUsername.disabled = !enabled || !isAccountMode || hasAccountListConfigured;
+    btnToggleIpProxyUsername.disabled = !enabled || !isAccountMode || hasAccountListConfigured || isClash;
   }
   if (btnToggleIpProxyPassword) {
-    btnToggleIpProxyPassword.disabled = !enabled || !isAccountMode || hasAccountListConfigured;
+    btnToggleIpProxyPassword.disabled = !enabled || !isAccountMode || hasAccountListConfigured || isClash;
   }
   if (inputIpProxyRegion) {
-    inputIpProxyRegion.disabled = !enabled || !isAccountMode || hasAccountListConfigured;
+    inputIpProxyRegion.disabled = !enabled || !isAccountMode || hasAccountListConfigured || isClash;
   }
   if (inputIpProxyAccountSessionPrefix) {
     inputIpProxyAccountSessionPrefix.disabled = !enabled || !isAccountMode || hasAccountListConfigured;
@@ -1406,7 +1442,7 @@ function updateIpProxyUI(state = latestState) {
     inputIpProxyAccountLifeMinutes.disabled = !enabled || !isAccountMode || hasAccountListConfigured;
   }
   if (inputIpProxyAccountList) {
-    inputIpProxyAccountList.disabled = !enabled || !isAccountMode || !accountListAvailable;
+    inputIpProxyAccountList.disabled = !enabled || !isAccountMode || !accountListAvailable || isClash;
   }
   const autoSyncEnabledInput = typeof inputIpProxyAutoSyncEnabled !== 'undefined' ? inputIpProxyAutoSyncEnabled : null;
   const autoSyncIntervalInput = typeof inputIpProxyAutoSyncIntervalMinutes !== 'undefined' ? inputIpProxyAutoSyncIntervalMinutes : null;
@@ -1438,9 +1474,11 @@ function updateIpProxyUI(state = latestState) {
   if (btnIpProxyRefresh) {
     btnIpProxyRefresh.disabled = actionBusy || !enabled || !canOperate;
     btnIpProxyRefresh.textContent = busyAction === 'refresh'
-      ? (isApiMode ? '拉取中...' : '同步中...')
-      : (isApiMode ? '拉取' : '同步');
-    btnIpProxyRefresh.title = isApiMode ? '拉取代理池并应用当前代理' : '同步账号代理列表并应用当前代理';
+      ? (isApiMode ? '拉取中...' : (isClash ? '应用中...' : '同步中...'))
+      : (isApiMode ? '拉取' : (isClash ? '应用' : '同步'));
+    btnIpProxyRefresh.title = isApiMode
+      ? '拉取代理池并应用当前代理'
+      : (isClash ? '应用本地 Clash 代理并检测出口' : '同步账号代理列表并应用当前代理');
   }
   if (btnIpProxyNext) {
     btnIpProxyNext.disabled = actionBusy || !enabled || !canOperate || !hasCurrentEntry;
@@ -1452,7 +1490,7 @@ function updateIpProxyUI(state = latestState) {
     btnIpProxyChange.textContent = busyAction === 'change' ? 'Change中...' : 'Change';
     btnIpProxyChange.title = changeAvailable
       ? '保持当前会话并刷新出口（仅 711 + session）'
-      : '当前模式不支持 Change（需 711 账号模式且用户名包含 session）';
+      : (isClash ? 'Clash 节点切换请在 Clash Verge 内完成' : '当前模式不支持 Change（需 711 账号模式且用户名包含 session）');
   }
   if (btnIpProxyProbe) {
     btnIpProxyProbe.disabled = actionBusy || !enabled || !canOperate;
@@ -1465,6 +1503,7 @@ function updateIpProxyUI(state = latestState) {
   if (ipProxyActionHint) {
     const actionHint = buildIpProxyActionHintText({
       mode,
+      service,
       poolCount: runtimePoolCount,
       changeAvailable,
     });
@@ -1497,6 +1536,7 @@ async function refreshIpProxyPoolByApi(options = {}) {
     patch.ipProxyAppliedHost = String(response.proxyRouting.host || '').trim();
     patch.ipProxyAppliedPort = Number(response.proxyRouting.port) || 0;
     patch.ipProxyAppliedRegion = String(response.proxyRouting.region || '').trim();
+    patch.ipProxyAppliedClashNode = String(response.proxyRouting.clashNode || '').trim();
     patch.ipProxyAppliedHasAuth = Boolean(response.proxyRouting.hasAuth);
     patch.ipProxyAppliedProvider = normalizeIpProxyService(response.proxyRouting.provider || '');
     patch.ipProxyAppliedError = String(response.proxyRouting.error || '').trim();
@@ -1549,6 +1589,7 @@ async function switchIpProxyToNext(options = {}) {
     patch.ipProxyAppliedHost = String(response.proxyRouting.host || '').trim();
     patch.ipProxyAppliedPort = Number(response.proxyRouting.port) || 0;
     patch.ipProxyAppliedRegion = String(response.proxyRouting.region || '').trim();
+    patch.ipProxyAppliedClashNode = String(response.proxyRouting.clashNode || '').trim();
     patch.ipProxyAppliedHasAuth = Boolean(response.proxyRouting.hasAuth);
     patch.ipProxyAppliedProvider = normalizeIpProxyService(response.proxyRouting.provider || '');
     patch.ipProxyAppliedError = String(response.proxyRouting.error || '').trim();
@@ -1594,6 +1635,7 @@ async function changeIpProxyExitBySession(options = {}) {
     patch.ipProxyAppliedHost = String(response.proxyRouting.host || '').trim();
     patch.ipProxyAppliedPort = Number(response.proxyRouting.port) || 0;
     patch.ipProxyAppliedRegion = String(response.proxyRouting.region || '').trim();
+    patch.ipProxyAppliedClashNode = String(response.proxyRouting.clashNode || '').trim();
     patch.ipProxyAppliedHasAuth = Boolean(response.proxyRouting.hasAuth);
     patch.ipProxyAppliedProvider = normalizeIpProxyService(response.proxyRouting.provider || '');
     patch.ipProxyAppliedError = String(response.proxyRouting.error || '').trim();
@@ -1636,6 +1678,7 @@ async function probeIpProxyExit(options = {}) {
     ipProxyAppliedHost: String(routing.host || '').trim(),
     ipProxyAppliedPort: Number(routing.port) || 0,
     ipProxyAppliedRegion: String(routing.region || '').trim(),
+    ipProxyAppliedClashNode: String(routing.clashNode || '').trim(),
     ipProxyAppliedHasAuth: Boolean(routing.hasAuth),
     ipProxyAppliedProvider: normalizeIpProxyService(routing.provider || ''),
     ipProxyAppliedError: String(routing.error || '').trim(),

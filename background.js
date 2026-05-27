@@ -375,6 +375,7 @@ const {
 } = self.IcloudUtils;
 const {
   getIcloudForwardMailConfig: getSharedIcloudForwardMailConfig,
+  normalizeGmailMailboxUrl,
   normalizeIcloudForwardMailProvider,
   normalizeIcloudTargetMailboxType,
 } = self.MailProviderUtils;
@@ -495,6 +496,7 @@ const ICLOUD_ALIAS_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const ICLOUD_TRANSIENT_RETRY_MAX_ATTEMPTS = 2;
 const ICLOUD_TRANSIENT_RETRY_DELAY_MS = 1200;
 const ICLOUD_PROVIDER = 'icloud';
+const DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN = 'YanAutoPlus {date}';
 const GMAIL_PROVIDER = 'gmail';
 const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
 const HOTMAIL_PROVIDER = 'hotmail-api';
@@ -537,12 +539,16 @@ const DEFAULT_SUB2API_GROUP_NAMES = [
 ];
 const DEFAULT_SUB2API_REDIRECT_URI = 'http://localhost:1455/auth/callback';
 const DEFAULT_IP_PROXY_SERVICE = '711proxy';
-const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy'];
-const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy'];
+const IP_PROXY_SERVICE_CLASH = 'clash';
+const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy', IP_PROXY_SERVICE_CLASH];
+const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy', IP_PROXY_SERVICE_CLASH];
 const DEFAULT_IP_PROXY_MODE = 'account';
 const IP_PROXY_MODE_VALUES = ['api', 'account'];
 const DEFAULT_IP_PROXY_PROTOCOL = 'http';
 const IP_PROXY_PROTOCOL_VALUES = ['http', 'https', 'socks4', 'socks5'];
+const DEFAULT_CLASH_PROXY_HOST = '127.0.0.1';
+const DEFAULT_CLASH_PROXY_PORT = '7890';
+const DEFAULT_CLASH_PROXY_PROTOCOL = 'http';
 const IP_PROXY_FETCH_TIMEOUT_MS = 20000;
 const IP_PROXY_SETTINGS_SCOPE = 'regular';
 const IP_PROXY_BYPASS_LIST = ['<local>', 'localhost', '127.0.0.1'];
@@ -616,6 +622,7 @@ const HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_DEFAULT_SECONDS = 5;
 const HOSTED_CHECKOUT_VERIFICATION_POLL_INTERVAL_LIMIT_SECONDS = 60;
 const OUTLOOK_ALIAS_DEFAULT_MAX_PER_ACCOUNT = 5;
 const OUTLOOK_ALIAS_MAX_PER_ACCOUNT_LIMIT = 50;
+const DEFAULT_OUTLOOK_ALIAS_PATTERN = 'PayPal{n}';
 const OUTLOOK_SUBSCRIPTION_USED_KEYWORD = 'ChatGPT Plus Subscription';
 const VERIFICATION_RESEND_COUNT_MIN = 0;
 const VERIFICATION_RESEND_COUNT_MAX = 20;
@@ -679,7 +686,7 @@ const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
   PHONE_SMS_PROVIDER_CHATGPT_API,
 ]);
 const DEFAULT_SMS_POOL_BASE_URL = 'https://api.smspool.net';
-const DEFAULT_SMS_POOL_API_KEY = 'oIzju8HvZAzzNdO4ucIL2hi5XECAim4P';
+const DEFAULT_SMS_POOL_API_KEY = '';
 const DEFAULT_SMS_POOL_COUNTRY_ORDER = Object.freeze(['US']);
 const DEFAULT_SMS_POOL_SERVICE_ID = '671';
 const DEFAULT_SMS_POOL_SERVICE_LABEL = 'OpenAI / ChatGPT';
@@ -1180,9 +1187,13 @@ const PERSISTED_SETTING_DEFAULTS = {
   icloudTargetMailboxType: 'icloud-inbox',
   icloudForwardMailProvider: 'qq',
   icloudFetchMode: 'reuse_existing',
+  icloudAliasLabelPattern: DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN,
   accountRunHistoryTextEnabled: true,
   accountRunHistoryHelperBaseUrl: DEFAULT_ACCOUNT_RUN_HISTORY_HELPER_BASE_URL,
   gmailBaseEmail: '',
+  gmailAliasPattern: '',
+  gmailMailboxUrl: '',
+  gmailAliasNextNumber: 1,
   mail2925BaseEmail: '',
   currentMail2925AccountId: '',
   emailPrefix: '',
@@ -1225,6 +1236,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   eduSubtokenMailDomain: 'edu.subtoken.vip',
   hotmailAccounts: [],
   hotmailAliasEnabled: false,
+  outlookAliasPattern: DEFAULT_OUTLOOK_ALIAS_PATTERN,
   outlookAliasMaxPerAccount: OUTLOOK_ALIAS_DEFAULT_MAX_PER_ACCOUNT,
   hotmailAliasUsage: {},
   mail2925Accounts: [],
@@ -1683,6 +1695,12 @@ function normalizeOutlookAliasMaxPerAccount(value, fallback = OUTLOOK_ALIAS_DEFA
     return normalizedFallback;
   }
   return Math.min(OUTLOOK_ALIAS_MAX_PER_ACCOUNT_LIMIT, Math.max(1, Math.floor(numeric)));
+}
+
+function normalizeOutlookAliasPattern(value, fallback = DEFAULT_OUTLOOK_ALIAS_PATTERN) {
+  const normalized = String(value || '').trim();
+  const fallbackPattern = String(fallback || DEFAULT_OUTLOOK_ALIAS_PATTERN).trim() || DEFAULT_OUTLOOK_ALIAS_PATTERN;
+  return normalized || fallbackPattern;
 }
 
 function normalizeVerificationResendCount(value, fallback) {
@@ -3821,6 +3839,9 @@ function normalizePersistentSettingValue(key, value) {
         if (normalizedMailProvider === CLOUD_MAIL_PROVIDER) {
           return CLOUD_MAIL_PROVIDER;
         }
+        if (normalizedMailProvider === GMAIL_PROVIDER) {
+          return GMAIL_PROVIDER;
+        }
         if (normalizedMailProvider === EDU_SUBTOKEN_MAIL_PROVIDER) {
           return EDU_SUBTOKEN_MAIL_PROVIDER;
         }
@@ -3849,6 +3870,8 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeIcloudForwardMailProvider(value);
     case 'icloudFetchMode':
       return normalizeIcloudFetchMode(value);
+    case 'icloudAliasLabelPattern':
+      return normalizeIcloudAliasLabelPattern(value);
     case 'accountRunHistoryHelperBaseUrl':
       return normalizeAccountRunHistoryHelperBaseUrl(value);
     case 'localCpaJsonPluginDir':
@@ -3856,10 +3879,16 @@ function normalizePersistentSettingValue(key, value) {
     case 'localCpaJsonRelativeAuthDir':
       return normalizeLocalCpaJsonRelativeAuthDir(value);
     case 'gmailBaseEmail':
+    case 'gmailAliasPattern':
+    case 'gmailMailboxUrl':
     case 'mail2925BaseEmail':
     case 'currentMail2925AccountId':
     case 'emailPrefix':
       return String(value || '').trim();
+    case 'gmailAliasNextNumber': {
+      const numeric = Number.parseInt(String(value || '').trim(), 10);
+      return Number.isInteger(numeric) && numeric > 0 ? numeric : 1;
+    }
     case 'inbucketHost':
       return String(value || '').trim();
     case 'inbucketMailbox':
@@ -3934,6 +3963,11 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeHotmailAccounts(value);
     case 'hotmailAliasEnabled':
       return Boolean(value);
+    case 'outlookAliasPattern':
+      return normalizeOutlookAliasPattern(
+        value,
+        PERSISTED_SETTING_DEFAULTS.outlookAliasPattern
+      );
     case 'outlookAliasMaxPerAccount':
       return normalizeOutlookAliasMaxPerAccount(
         value,
@@ -4252,12 +4286,15 @@ async function getPersistedAliasState() {
   }
 }
 
-async function getState() {
+async function getState(options = {}) {
+  const includeAccountRunHistory = options?.includeAccountRunHistory !== false;
   const [state, persistedSettings, persistedAliasState, accountRunHistory] = await Promise.all([
     chrome.storage.session.get(null),
     getPersistedSettings(),
     getPersistedAliasState(),
-    accountRunHistoryHelpers?.getPersistedAccountRunHistory?.() || [],
+    includeAccountRunHistory
+      ? (accountRunHistoryHelpers?.getPersistedAccountRunHistory?.() || [])
+      : [],
   ]);
   return buildStateViewWithRuntimeState({
     ...DEFAULT_STATE,
@@ -5184,6 +5221,38 @@ function buildOutlookPayPalAliasEmail(baseEmail = '', index = 1) {
   return `${parts.local}+PayPal${numericIndex}@${parts.domain}`;
 }
 
+function sanitizeOutlookAliasTag(tag = '') {
+  return String(tag || '')
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 64);
+}
+
+function buildOutlookAliasTagFromPattern(pattern = '', index = 1) {
+  const normalizedPattern = normalizeOutlookAliasPattern(pattern);
+  const numericIndex = Math.max(1, Math.floor(Number(index) || 1));
+  const paddedIndex = String(numericIndex).padStart(3, '0');
+  const rendered = normalizedPattern
+    .replace(/\{(?:auto|n|number)\}/gi, String(numericIndex))
+    .replace(/\{padded\}/gi, paddedIndex)
+    .replace(/\{random\}/gi, generateRandomSuffix(6));
+  const normalizedTag = sanitizeOutlookAliasTag(rendered);
+  if (normalizedTag) {
+    return normalizedTag;
+  }
+  return `PayPal${numericIndex}`;
+}
+
+function buildOutlookAliasEmailFromPattern(baseEmail = '', index = 1, pattern = DEFAULT_OUTLOOK_ALIAS_PATTERN) {
+  const parts = parseEmailAddressParts(baseEmail);
+  if (!parts) {
+    return '';
+  }
+  const tag = buildOutlookAliasTagFromPattern(pattern, index);
+  return tag ? `${parts.local}+${tag}@${parts.domain}` : '';
+}
+
 function getOutlookPayPalAliasIndex(aliasEmail = '', account = {}) {
   const aliasParts = parseEmailAddressParts(aliasEmail);
   const baseParts = parseEmailAddressParts(account?.email);
@@ -5197,6 +5266,21 @@ function getOutlookPayPalAliasIndex(aliasEmail = '', account = {}) {
   }
   const numeric = Number(local.slice(prefix.length));
   return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function getOutlookAliasPatternIndex(aliasEmail = '', account = {}, pattern = DEFAULT_OUTLOOK_ALIAS_PATTERN) {
+  const aliasKey = normalizeEmailAddressForMatch(aliasEmail);
+  if (!aliasKey || !isOutlookPlusAliasForAccount(aliasEmail, account)) {
+    return getOutlookPayPalAliasIndex(aliasEmail, account);
+  }
+  const maxAliases = OUTLOOK_ALIAS_MAX_PER_ACCOUNT_LIMIT;
+  for (let index = 1; index <= maxAliases; index += 1) {
+    const candidate = buildOutlookAliasEmailFromPattern(account?.email, index, pattern);
+    if (normalizeEmailAddressForMatch(candidate) === aliasKey) {
+      return index;
+    }
+  }
+  return getOutlookPayPalAliasIndex(aliasEmail, account);
 }
 
 function isHotmailAliasUsed(usage = {}, account = {}, aliasEmail = '') {
@@ -5378,14 +5462,15 @@ async function ensureOutlookAliasForHotmailAccount(account = {}, options = {}) {
   }
 
   const maxAliases = normalizeOutlookAliasMaxPerAccount(state.outlookAliasMaxPerAccount);
+  const aliasPattern = normalizeOutlookAliasPattern(state.outlookAliasPattern);
   let latestUsage = normalizeHotmailAliasUsage(state.hotmailAliasUsage);
   const reusableAliases = getHotmailAliasEntriesForAccount(latestUsage, account)
     .filter((entry) => !entry.used)
     .map((entry) => entry.email)
     .filter(Boolean)
     .sort((left, right) => {
-      const leftIndex = getOutlookPayPalAliasIndex(left, account);
-      const rightIndex = getOutlookPayPalAliasIndex(right, account);
+      const leftIndex = getOutlookAliasPatternIndex(left, account, aliasPattern);
+      const rightIndex = getOutlookAliasPatternIndex(right, account, aliasPattern);
       if (leftIndex !== null || rightIndex !== null) {
         return (leftIndex ?? Number.MAX_SAFE_INTEGER) - (rightIndex ?? Number.MAX_SAFE_INTEGER);
       }
@@ -5400,7 +5485,7 @@ async function ensureOutlookAliasForHotmailAccount(account = {}, options = {}) {
     if (existingAliasSet.size + generatedCandidates.length >= maxAliases) {
       break;
     }
-    const candidate = buildOutlookPayPalAliasEmail(account.email, index);
+    const candidate = buildOutlookAliasEmailFromPattern(account.email, index, aliasPattern);
     const candidateKey = normalizeEmailAddressForMatch(candidate);
     if (!candidate || existingAliasSet.has(candidateKey) || generatedCandidates.some((item) => normalizeEmailAddressForMatch(item) === candidateKey)) {
       continue;
@@ -6537,6 +6622,50 @@ function isReusableGeneratedAliasEmail(state = {}, email = state?.email) {
   return isManagedAliasEmail(email, state?.mailProvider, getManagedAliasBaseEmail(state));
 }
 
+function sanitizeGmailAliasTag(value = '') {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/[^A-Za-z0-9._-]/g, '')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 64);
+}
+
+function getGmailAliasNextNumber(state = {}) {
+  const numeric = Number.parseInt(String(state?.gmailAliasNextNumber || '').trim(), 10);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : 1;
+}
+
+function buildGmailAliasTagFromPattern(pattern = '', state = {}) {
+  const normalizedPattern = String(pattern || '').trim();
+  if (!normalizedPattern) {
+    return generateRandomWordAliasTag();
+  }
+
+  const nextNumber = getGmailAliasNextNumber(state);
+  const paddedNumber = String(nextNumber).padStart(3, '0');
+  const tag = normalizedPattern
+    .replace(/\{(?:auto|n|number)\}/gi, paddedNumber)
+    .replace(/\{random\}/gi, generateRandomWordAliasTag());
+  const normalizedTag = sanitizeGmailAliasTag(tag);
+  if (!normalizedTag) {
+    throw new Error('Gmail 别名规则无效，请保留字母、数字、点、下划线或短横线。');
+  }
+  return normalizedTag;
+}
+
+function gmailAliasPatternUsesCounter(pattern = '') {
+  return /\{(?:auto|n|number)\}/i.test(String(pattern || ''));
+}
+
+function getNextGmailAliasNumberAfterGeneration(state = {}) {
+  const pattern = String(state?.gmailAliasPattern || '').trim();
+  if (!gmailAliasPatternUsesCounter(pattern)) {
+    return null;
+  }
+  return getGmailAliasNextNumber(state) + 1;
+}
+
 function buildGeneratedAliasEmail(state) {
   const provider = state.mailProvider || '163';
   const baseEmail = getManagedAliasBaseEmail(state, provider);
@@ -6552,20 +6681,19 @@ function buildGeneratedAliasEmail(state) {
   }
 
   const utils = getManagedAliasUtils();
+  const aliasTag = provider === GMAIL_PROVIDER
+    ? buildGmailAliasTagFromPattern(state?.gmailAliasPattern, state)
+    : generateRandomSuffix(6);
   if (utils?.buildManagedAliasEmail) {
-    return utils.buildManagedAliasEmail(
-      provider,
-      baseEmail,
-      provider === GMAIL_PROVIDER ? generateRandomWordAliasTag() : generateRandomSuffix(6)
-    );
+    return utils.buildManagedAliasEmail(provider, baseEmail, aliasTag);
   }
 
   const parsedBaseEmail = parseManagedAliasBaseEmail(baseEmail, provider);
   if (provider === GMAIL_PROVIDER) {
-    return `${parsedBaseEmail.localPart}+${generateRandomWordAliasTag()}@${parsedBaseEmail.domain}`;
+    return `${parsedBaseEmail.localPart}+${aliasTag}@${parsedBaseEmail.domain}`;
   }
   if (provider === '2925') {
-    return `${parsedBaseEmail.localPart}${generateRandomSuffix(6)}@${parsedBaseEmail.domain}`;
+    return `${parsedBaseEmail.localPart}${aliasTag}@${parsedBaseEmail.domain}`;
   }
 
   throw new Error(`未支持的别名邮箱类型：${provider}`);
@@ -8563,10 +8691,24 @@ async function resolveIcloudPremiumMailService(options = {}) {
     : `Could not validate iCloud session. 请先在当前浏览器登录 ${effectiveHost || 'icloud.com 或 icloud.com.cn'}。`);
 }
 
-function getIcloudAliasLabel() {
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return `MultiPage ${dateStr}`;
+function normalizeIcloudAliasLabelPattern(value = '') {
+  const normalized = String(value || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  return normalized || DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN;
+}
+
+function formatIcloudAliasLabelPattern(pattern = DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN, date = new Date()) {
+  const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const dateStr = `${safeDate.getFullYear()}-${String(safeDate.getMonth() + 1).padStart(2, '0')}-${String(safeDate.getDate()).padStart(2, '0')}`;
+  const timeStr = `${String(safeDate.getHours()).padStart(2, '0')}${String(safeDate.getMinutes()).padStart(2, '0')}${String(safeDate.getSeconds()).padStart(2, '0')}`;
+  return normalizeIcloudAliasLabelPattern(pattern)
+    .replace(/\{date\}/gi, dateStr)
+    .replace(/\{time\}/gi, timeStr)
+    .replace(/\{timestamp\}/gi, String(safeDate.getTime()))
+    .slice(0, 120);
+}
+
+function getIcloudAliasLabel(state = {}) {
+  return formatIcloudAliasLabelPattern(state?.icloudAliasLabelPattern || DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN);
 }
 
 async function checkIcloudSession(options = {}) {
@@ -8861,7 +9003,7 @@ async function fetchIcloudHideMyEmail(options = {}) {
           ? generatedHmeRaw
           : {}),
         hme: generatedAlias,
-        label: getIcloudAliasLabel(),
+        label: getIcloudAliasLabel(options?.state || {}),
         note: 'Generated through YanAutoPlus',
       };
 
@@ -12770,7 +12912,10 @@ const generatedEmailHelpers = self.MultiPageGeneratedEmailHelpers?.createGenerat
   reuseOrCreateTab,
   sendToContentScript,
   setEmailState,
+  setPersistentSettings,
+  setState,
   throwIfStopped,
+  getNextGmailAliasNumberAfterGeneration,
 });
 
 function generateCloudflareAliasLocalPart() {
@@ -15160,7 +15305,7 @@ function getMailConfig(state) {
   if (provider === GMAIL_PROVIDER) {
     return {
       source: 'gmail-mail',
-      url: 'https://mail.google.com/mail/u/0/#inbox',
+      url: normalizeGmailMailboxUrl(state.gmailMailboxUrl),
       label: 'Gmail 邮箱',
       inject: ['content/activation-utils.js', 'content/utils.js', 'content/gmail-mail.js'],
       injectSource: 'gmail-mail',

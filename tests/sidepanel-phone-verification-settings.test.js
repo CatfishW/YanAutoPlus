@@ -61,6 +61,9 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="btn-toggle-phone-verification-section"/);
   assert.match(html, /id="row-phone-verification-fold"/);
   assert.match(html, /id="input-phone-verification-enabled"/);
+  assert.match(html, /id="input-plus-mode-enabled"/);
+  assert.doesNotMatch(html, /id="input-plus-mode-enabled"[^>]*disabled/);
+  assert.doesNotMatch(html, /已固定开启/);
   assert.match(html, /id="row-signup-method"/);
   assert.match(html, /id="row-signup-phone"/);
   assert.match(html, /id="input-signup-phone"/);
@@ -1105,7 +1108,7 @@ const inputPhoneCodeTimeoutWindows = { value: '3' };
 const inputPhoneCodePollIntervalSeconds = { value: '6' };
 const inputPhoneCodePollMaxRounds = { value: '18' };
 const inputAccountRunHistoryHelperBaseUrl = { value: 'http://127.0.0.1:17373' };
-const FIXED_PLUS_MODE_ENABLED = true;
+const inputPlusModeEnabled = { checked: false };
 const DEFAULT_VERIFICATION_RESEND_COUNT = 4;
 const DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT = 3;
 const DEFAULT_PHONE_CODE_WAIT_SECONDS = 60;
@@ -1238,6 +1241,7 @@ return { collectSettingsPayload };
 
   const payload = api.collectSettingsPayload();
 
+  assert.equal(payload.plusModeEnabled, false);
   assert.equal(payload.phoneVerificationEnabled, true);
   assert.equal(payload.signupMethod, 'phone');
   assert.equal(payload.phoneSmsProvider, 'hero-sms');

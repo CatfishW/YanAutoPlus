@@ -80,6 +80,22 @@ return { getSelectedIcloudHostPreference, getMailProviderLoginUrl };
   assert.equal(api.getMailProviderLoginUrl(), 'https://www.icloud.com.cn/');
 });
 
+test('normalizeSupportedMailProvider keeps icloud selectable', () => {
+  const bundle = extractFunction('normalizeSupportedMailProvider');
+  const api = new Function(`
+const HOTMAIL_PROVIDER = 'hotmail-api';
+const ICLOUD_PROVIDER = 'icloud';
+const GMAIL_PROVIDER = 'gmail';
+const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
+const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+${bundle}
+return { normalizeSupportedMailProvider };
+`)();
+
+  assert.equal(api.normalizeSupportedMailProvider('icloud'), 'icloud');
+});
+
 test('collectSettingsPayload persists icloud target mailbox settings', () => {
   const bundle = extractFunction('collectSettingsPayload');
 
@@ -109,6 +125,7 @@ const selectIcloudHostPreference = { value: 'auto' };
 const selectIcloudFetchMode = { value: 'reuse_existing' };
 const selectIcloudTargetMailboxType = { value: 'forward-mailbox' };
 const selectIcloudForwardMailProvider = { value: 'gmail' };
+const inputIcloudAliasLabelPattern = { value: 'OpenAI {date}' };
 const inputPhoneVerificationEnabled = { checked: false };
 const selectPhoneSmsProvider = { value: 'hero-sms' };
 const inputFiveSimOperator = { value: 'any' };
@@ -127,6 +144,15 @@ const inputTempEmailAdminAuth = { value: '' };
 const inputTempEmailCustomAuth = { value: '' };
 const inputTempEmailReceiveMailbox = { value: '' };
 const inputTempEmailUseRandomSubdomain = { checked: false };
+const DEFAULT_EDU_SUBTOKEN_MAIL_RECEIVE_MAILBOX = 'admin@edu.subtoken.vip';
+const inputEduSubtokenMailBaseUrl = { value: '' };
+const inputEduSubtokenMailReceiveMailbox = { value: DEFAULT_EDU_SUBTOKEN_MAIL_RECEIVE_MAILBOX };
+const inputEduSubtokenMailReceivePassword = { value: '' };
+const inputEduSubtokenMailAccountPrefix = { value: 'subtoken' };
+const inputEduSubtokenMailNextNumber = { value: '1' };
+const inputEduSubtokenMailNumberPadding = { value: '3' };
+const inputEduSubtokenMailAccountSuffix = { value: '' };
+const inputEduSubtokenMailAccountPassword = { value: '' };
 const inputAutoSkipFailures = { checked: false };
 const inputAutoSkipFailuresThreadIntervalMinutes = { value: '0' };
 const inputAutoDelayEnabled = { checked: false };
@@ -203,18 +229,33 @@ function getSelectedHeroSmsCountryOption() { return { id: 52, label: 'Thailand' 
 function syncHeroSmsFallbackSelectionOrderFromSelect() { return [{ id: 52, label: 'Thailand' }]; }
 function getPayPalAccounts() { return []; }
 function getCurrentPayPalAccount() { return null; }
+function renderPayPalAccounts() {}
 function getCloudflareDomainsFromState() { return { domains: [], activeDomain: '' }; }
 function normalizeCloudflareDomainValue(value) { return String(value || '').trim(); }
 function getCloudflareTempEmailDomainsFromState() { return { domains: [], activeDomain: '' }; }
 function normalizeCloudflareTempEmailDomainValue(value) { return String(value || '').trim(); }
 function getSelectedLocalCpaStep9Mode() { return 'submit'; }
 function getSelectedMail2925Mode() { return 'provide'; }
-function buildManagedAliasBaseEmailPayload() { return { gmailBaseEmail: '', mail2925BaseEmail: '', emailPrefix: '' }; }
+function buildManagedAliasBaseEmailPayload() { return { gmailBaseEmail: '', mail2925BaseEmail: '', icloudAliasLabelPattern: inputIcloudAliasLabelPattern.value, emailPrefix: '' }; }
 function getSelectedHotmailServiceMode() { return 'local'; }
 function normalizeLuckmailBaseUrl(value) { return String(value || '').trim(); }
 function normalizeLuckmailEmailType(value) { return String(value || '').trim() || 'ms_graph'; }
 function normalizeCloudflareTempEmailBaseUrlValue(value) { return String(value || '').trim(); }
 function normalizeCloudflareTempEmailReceiveMailboxValue(value) { return String(value || '').trim(); }
+function normalizeEduSubtokenMailBaseUrlValue(value = '') { return String(value || '').trim() || 'https://edu.subtoken.vip/mail/api'; }
+function normalizeEduSubtokenMailReceiveMailboxValue(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalized) ? normalized : '';
+}
+function normalizeEduSubtokenMailUsernamePartValue(value = '', fallback = '') {
+  return String(value || fallback || '').trim().toLowerCase().replace(/@.*$/g, '').replace(/[^a-z0-9._-]/g, '');
+}
+function normalizeEduSubtokenMailNextNumberValue(value = 1) { return Math.max(1, Math.floor(Number(value) || 1)); }
+function normalizeEduSubtokenMailNumberPaddingValue(value = 3) {
+  const parsed = Math.floor(Number(value));
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(8, parsed)) : 3;
+}
+function normalizeEduSubtokenMailAccountPasswordValue(value = '') { return String(value || '').length >= 10 ? String(value || '') : ''; }
 function normalizeAccountRunHistoryHelperBaseUrlValue(value) { return String(value || '').trim(); }
 function normalizeAutoRunThreadIntervalMinutes(value) { return Number(value) || 0; }
 function normalizeAutoDelayMinutes(value) { return Number(value) || 30; }
@@ -243,6 +284,7 @@ return { collectSettingsPayload };
   const payload = api.collectSettingsPayload();
   assert.equal(payload.icloudTargetMailboxType, 'forward-mailbox');
   assert.equal(payload.icloudForwardMailProvider, 'gmail');
+  assert.equal(payload.icloudAliasLabelPattern, 'OpenAI {date}');
 });
 
 test('updateMailProviderUI toggles icloud forward mailbox controls and hint', () => {
@@ -257,6 +299,9 @@ const ICLOUD_PROVIDER = 'icloud';
 const GMAIL_PROVIDER = 'gmail';
 const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+const EDU_SUBTOKEN_MAIL_GENERATOR = 'edu-subtoken-mail-api';
+const DEFAULT_EDU_SUBTOKEN_MAIL_RECEIVE_MAILBOX = 'admin@edu.subtoken.vip';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const HOTMAIL_SERVICE_MODE_REMOTE = 'remote';
 const HOTMAIL_SERVICE_MODE_LOCAL = 'local';
@@ -278,9 +323,19 @@ const cloudflareTempEmailSection = createRow();
 const hotmailSection = createRow();
 const mail2925Section = createRow();
 const luckmailSection = createRow();
+const eduSubtokenMailSection = createRow();
+const rowEduSubtokenMailBaseUrl = createRow();
+const rowEduSubtokenMailReceiveMailbox = createRow();
+const rowEduSubtokenMailReceivePassword = createRow();
+const rowEduSubtokenMailAccountPattern = createRow();
+const rowEduSubtokenMailAccountPassword = createRow();
+const rowEduSubtokenMailCurrentAccount = createRow();
 const icloudSection = createRow();
 const rowIcloudTargetMailboxType = createRow();
 const rowIcloudForwardMailProvider = createRow();
+const rowIcloudAliasLabelPattern = createRow();
+const rowGmailAliasPattern = createRow();
+const rowGmailMailboxUrl = createRow();
 const labelEmailPrefix = { textContent: '' };
 const inputEmailPrefix = { placeholder: '', style: { display: '' }, readOnly: false };
 const labelMail2925UseAccountPool = createRow();
@@ -297,15 +352,23 @@ const selectMailProvider = { value: 'icloud' };
 const selectEmailGenerator = { value: 'duck', disabled: false, options: [] };
 const selectIcloudTargetMailboxType = { value: 'icloud-inbox' };
 const selectIcloudForwardMailProvider = { value: 'gmail' };
+const inputEduSubtokenMailReceiveMailbox = { value: DEFAULT_EDU_SUBTOKEN_MAIL_RECEIVE_MAILBOX };
 const selectIcloudHostPreference = { value: 'icloud.com.cn' };
 const inputTempEmailUseRandomSubdomain = { checked: false };
 const inputRunCount = { disabled: false };
 const currentAutoRun = { autoRunning: false };
 const MAIL_PROVIDER_LOGIN_CONFIGS = { gmail: { label: 'Gmail 邮箱' } };
-const ICLOUD_FORWARD_MAIL_PROVIDER_LABELS = { gmail: 'Gmail 邮箱' };
+const ICLOUD_FORWARD_MAIL_PROVIDER_LABELS = { gmail: 'Gmail 邮箱', [EDU_SUBTOKEN_MAIL_PROVIDER]: 'Edu Subtoken Mail API' };
 function normalizeIcloudHost(value) { return String(value || '').trim().toLowerCase(); }
 function normalizeIcloudTargetMailboxType(value) { return String(value || '').trim().toLowerCase() === 'forward-mailbox' ? 'forward-mailbox' : 'icloud-inbox'; }
-function normalizeIcloudForwardMailProvider(value) { return String(value || '').trim().toLowerCase() === 'gmail' ? 'gmail' : 'qq'; }
+function normalizeIcloudForwardMailProvider(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === EDU_SUBTOKEN_MAIL_PROVIDER ? EDU_SUBTOKEN_MAIL_PROVIDER : (normalized === 'gmail' ? 'gmail' : 'qq');
+}
+function normalizeEduSubtokenMailReceiveMailboxValue(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalized) ? normalized : '';
+}
 function getSelectedIcloudHostPreference() { return selectIcloudHostPreference.value; }
 function isLuckmailProvider() { return false; }
 function isCustomMailProvider() { return false; }
@@ -325,6 +388,7 @@ function queueIcloudAliasRefresh() {}
 function hideIcloudLoginHelp() {}
 function syncMail2925PoolAccountOptions() {}
 function getMail2925Accounts() { return []; }
+function renderPayPalAccounts() {}
 function renderHotmailAccounts() {}
 function renderMail2925Accounts() {}
 function renderLuckmailPurchases() {}
@@ -342,6 +406,7 @@ return {
   updateMailProviderUI,
   rowIcloudTargetMailboxType,
   rowIcloudForwardMailProvider,
+  rowIcloudAliasLabelPattern,
   selectIcloudTargetMailboxType,
   autoHintText,
 };
@@ -350,6 +415,7 @@ return {
   api.updateMailProviderUI();
   assert.equal(api.rowIcloudTargetMailboxType.style.display, '');
   assert.equal(api.rowIcloudForwardMailProvider.style.display, 'none');
+  assert.equal(api.rowIcloudAliasLabelPattern.style.display, '');
 
   api.selectIcloudTargetMailboxType.value = 'forward-mailbox';
   api.updateMailProviderUI();
@@ -377,6 +443,8 @@ const inputCodex2ApiAdminKey = { value: '' };
 const ICLOUD_PROVIDER = 'icloud';
 const GMAIL_PROVIDER = 'gmail';
 const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
+const EDU_SUBTOKEN_MAIL_GENERATOR = 'edu-subtoken-mail-api';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const selectMailProvider = { value: '163' };
 const selectEmailGenerator = { value: 'duck' };
@@ -384,6 +452,7 @@ const selectIcloudHostPreference = { value: 'auto' };
 const selectIcloudFetchMode = { value: 'reuse_existing' };
 const selectIcloudTargetMailboxType = { value: 'icloud-inbox' };
 const selectIcloudForwardMailProvider = { value: 'qq' };
+const inputIcloudAliasLabelPattern = { value: '' };
 const checkboxAutoDeleteIcloud = { checked: false };
 const inputAccountRunHistoryHelperBaseUrl = { value: '' };
 const inputContributionNickname = { value: '' };
@@ -393,6 +462,8 @@ const inputInbucketHost = { value: '' };
 const inputInbucketMailbox = { value: '' };
 const inputCustomMailProviderPool = { value: '' };
 const inputCustomEmailPool = { value: '' };
+const inputGmailAliasPattern = { value: '' };
+const inputGmailMailboxUrl = { value: '' };
 const inputHotmailRemoteBaseUrl = { value: '' };
 const inputHotmailLocalBaseUrl = { value: '' };
 const inputLuckmailApiKey = { value: '' };
@@ -400,7 +471,10 @@ const inputLuckmailBaseUrl = { value: '' };
 const selectLuckmailEmailType = { value: 'ms_graph' };
 const inputLuckmailDomain = { value: '' };
 const inputAutoSkipFailures = { checked: false };
+const inputAutoRunRetryNonFreeTrial = { checked: false };
+const inputAutoRunRetryPaypalCallback = { checked: false };
 const inputAutoSkipFailuresThreadIntervalMinutes = { value: '' };
+const inputStep6CookieCleanupEnabled = { checked: false };
 const inputAutoDelayEnabled = { checked: false };
 const inputAutoDelayMinutes = { value: '' };
 const inputAutoStepDelaySeconds = { value: '' };
@@ -424,6 +498,11 @@ const inputRunCount = { value: '' };
 const DEFAULT_VERIFICATION_RESEND_COUNT = 4;
 const PHONE_SMS_PROVIDER_HERO_SMS = 'hero-sms';
 const PHONE_SMS_PROVIDER_FIVE_SIM = '5sim';
+const PHONE_SMS_PROVIDER_SMSBOWER = 'smsbower';
+const PHONE_SMS_PROVIDER_SMS_VERIFICATION_NUMBER = 'sms-verification-number';
+const PHONE_SMS_PROVIDER_GRIZZLYSMS = 'grizzlysms';
+const PHONE_SMS_PROVIDER_SMSPOOL = 'smspool';
+const PHONE_SMS_PROVIDER_CHATGPT_API = 'chatgpt-api';
 const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO_SMS;
 const DEFAULT_FIVE_SIM_COUNTRY_ID = 'vietnam';
 const DEFAULT_FIVE_SIM_COUNTRY_LABEL = '越南 (Vietnam)';
@@ -460,9 +539,11 @@ function normalizePanelMode(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === 'sub2api' || normalized === 'codex2api' ? normalized : 'cpa';
 }
+function getExportTargetForPanelMode(value = '') { return normalizePanelMode(value); }
 function isCustomMailProvider() { return false; }
 function setMail2925Mode() {}
 function normalizeIcloudFetchMode(value) { return String(value || '') === 'always_new' ? 'always_new' : 'reuse_existing'; }
+function normalizeIcloudAliasLabelPattern(value) { return String(value || '').trim() || 'YanAutoPlus {date}'; }
 function normalizeIcloudTargetMailboxType(value) { return String(value || '').trim().toLowerCase() === 'forward-mailbox' ? 'forward-mailbox' : 'icloud-inbox'; }
 function normalizeIcloudForwardMailProvider(value) { return String(value || '').trim().toLowerCase() === 'gmail' ? 'gmail' : 'qq'; }
 function normalizeAccountRunHistoryHelperBaseUrlValue(value) { return String(value || '').trim(); }
@@ -506,6 +587,7 @@ function normalizePhoneCodeTimeoutWindowsValue(value, fallback = 2) { const pars
 function normalizePhoneCodePollIntervalSecondsValue(value, fallback = 5) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
 function normalizePhoneCodePollMaxRoundsValue(value, fallback = 4) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
 function getSelectedHeroSmsCountryOption() { return { id: 52, label: 'Thailand' }; }
+function restorePhoneSmsCountrySelectionFromState() {}
 function applyHeroSmsFallbackSelection() {}
 function updateHeroSmsPlatformDisplay() {}
 function updatePhoneSmsProviderOrderSummary() {}
@@ -516,21 +598,26 @@ function updateFallbackThreadIntervalInputState() {}
 function updateAccountRunHistorySettingsUI() {}
 function updatePhoneVerificationSettingsUI() {}
 function updatePanelModeUI() {}
+function updatePlusCheckoutConversionModeUi() {}
+function validateHostedCheckoutContactConfig() {}
 function updateMailProviderUI() { calls.push({ target: selectIcloudTargetMailboxType.value, provider: selectIcloudForwardMailProvider.value }); }
 function renderSub2ApiGroupOptions() {}
 function isLuckmailProvider() { return false; }
+function setPreStartSkippedNodeIds() {}
 function updateButtonStates() {}
 ${bundle}
-return { applySettingsState, selectIcloudTargetMailboxType, selectIcloudForwardMailProvider };
+return { applySettingsState, selectIcloudTargetMailboxType, selectIcloudForwardMailProvider, inputIcloudAliasLabelPattern };
 `)(calls);
 
   api.applySettingsState({
     mailProvider: 'icloud',
     icloudTargetMailboxType: 'forward-mailbox',
     icloudForwardMailProvider: 'gmail',
+    icloudAliasLabelPattern: 'Apple Flow {date}',
   });
 
   assert.equal(api.selectIcloudTargetMailboxType.value, 'forward-mailbox');
   assert.equal(api.selectIcloudForwardMailProvider.value, 'gmail');
+  assert.equal(api.inputIcloudAliasLabelPattern.value, 'Apple Flow {date}');
   assert.deepEqual(calls.at(-1), { target: 'forward-mailbox', provider: 'gmail' });
 });

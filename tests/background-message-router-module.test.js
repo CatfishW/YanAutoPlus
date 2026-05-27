@@ -69,17 +69,17 @@ test('background HeroSMS phone prefix inference covers built-in major countries'
   const supportedBlock = source.slice(supportedStart, source.indexOf('];', supportedStart));
   const prefixBlock = source.slice(prefixStart, prefixEnd);
 
-  assert.match(supportedBlock, /\[6,\s*52,\s*187,\s*16,\s*151,\s*43,\s*73,\s*10/);
   [
     ['84', 10, 'Vietnam'],
     ['66', 52, 'Thailand'],
     ['62', 6, 'Indonesia'],
     ['44', 16, 'United Kingdom'],
-    ['81', 151, 'Japan'],
+    ['81', 182, 'Japan'],
     ['49', 43, 'Germany'],
-    ['33', 73, 'France'],
+    ['33', 78, 'France'],
     ['1', 187, 'USA'],
   ].forEach(([prefix, id, label]) => {
+    assert.match(supportedBlock, new RegExp(`\\b${id}\\b`));
     assert.match(prefixBlock, new RegExp(`prefix:\\s*'${prefix}'[\\s\\S]*id:\\s*${id}[\\s\\S]*label:\\s*'${label}'`));
   });
 });
@@ -294,6 +294,53 @@ test('SAVE_SETTING broadcasts operation delay setting without background success
   assert.equal(state.operationDelayEnabled, false);
   assert.deepStrictEqual(broadcasts.at(-1), { operationDelayEnabled: false });
   assert.equal(logs.length, 0);
+});
+
+test('SAVE_SETTING responds without waiting for contribution mode resync', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const getStateOptions = [];
+  let contributionResyncCalled = false;
+  let state = {
+    contributionMode: true,
+    operationDelayEnabled: true,
+    plusModeEnabled: false,
+    plusPaymentMethod: 'paypal',
+  };
+
+  const router = api.createMessageRouter({
+    addLog: async () => {},
+    buildLuckmailSessionSettingsPayload: () => ({}),
+    buildPersistentSettingsPayload: (input = {}) => Object.prototype.hasOwnProperty.call(input, 'operationDelayEnabled')
+      ? { operationDelayEnabled: input.operationDelayEnabled === false ? false : true }
+      : {},
+    broadcastDataUpdate: () => {},
+    getState: async (options = {}) => {
+      getStateOptions.push(options);
+      return { ...state };
+    },
+    setContributionMode: () => {
+      contributionResyncCalled = true;
+      return new Promise(() => {});
+    },
+    setPersistentSettings: async () => {},
+    setState: async (updates) => { state = { ...state, ...updates }; },
+  });
+
+  const response = await Promise.race([
+    router.handleMessage({
+      type: 'SAVE_SETTING',
+      source: 'sidepanel',
+      payload: { operationDelayEnabled: false },
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('SAVE_SETTING did not respond promptly')), 50)),
+  ]);
+
+  assert.equal(response.ok, true);
+  assert.equal(response.state.operationDelayEnabled, false);
+  assert.ok(contributionResyncCalled);
+  assert.ok(getStateOptions.some((options) => options.includeAccountRunHistory === false));
 });
 
 test('SAVE_SETTING re-resolves signup method when panel mode changes', async () => {

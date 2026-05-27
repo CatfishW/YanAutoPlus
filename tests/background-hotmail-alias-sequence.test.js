@@ -56,6 +56,7 @@ test('Hotmail Outlook aliases are allocated as PayPal sequence tags', async () =
   const api = new Function(`
 const OUTLOOK_ALIAS_DEFAULT_MAX_PER_ACCOUNT = 5;
 const OUTLOOK_ALIAS_MAX_PER_ACCOUNT_LIMIT = 50;
+const DEFAULT_OUTLOOK_ALIAS_PATTERN = 'PayPal{n}';
 let state = {
   email: '',
   hotmailAliasEnabled: true,
@@ -64,6 +65,7 @@ let state = {
 };
 const allocated = [];
 
+function generateRandomSuffix() { return 'rnd001'; }
 async function getState() {
   return state;
 }
@@ -86,6 +88,7 @@ async function setEmailState(email) {
 }
 
 ${extractFunction('normalizeOutlookAliasMaxPerAccount')}
+${extractFunction('normalizeOutlookAliasPattern')}
 ${extractFunction('normalizeEmailAddressForMatch')}
 ${extractFunction('isHotmailAliasEnabled')}
 ${extractFunction('getHotmailAliasUsageKey')}
@@ -96,7 +99,11 @@ ${extractFunction('parseEmailAddressParts')}
 ${extractFunction('isOutlookPlusAliasForAccount')}
 ${extractFunction('buildOutlookPlusAliasEmail')}
 ${extractFunction('buildOutlookPayPalAliasEmail')}
+${extractFunction('sanitizeOutlookAliasTag')}
+${extractFunction('buildOutlookAliasTagFromPattern')}
+${extractFunction('buildOutlookAliasEmailFromPattern')}
 ${extractFunction('getOutlookPayPalAliasIndex')}
+${extractFunction('getOutlookAliasPatternIndex')}
 ${extractFunction('isHotmailAliasUsed')}
 ${extractFunction('ensureOutlookAliasForHotmailAccount')}
 
@@ -121,6 +128,91 @@ return {
   assert.deepEqual(api.allocated, [
     'user+PayPal1@hotmail.com',
     'user+PayPal2@hotmail.com',
+  ]);
+});
+
+test('Hotmail Outlook aliases use the configured alias pattern', async () => {
+  const api = new Function(`
+const OUTLOOK_ALIAS_DEFAULT_MAX_PER_ACCOUNT = 5;
+const OUTLOOK_ALIAS_MAX_PER_ACCOUNT_LIMIT = 50;
+const DEFAULT_OUTLOOK_ALIAS_PATTERN = 'PayPal{n}';
+let state = {
+  email: '',
+  hotmailAliasEnabled: true,
+  outlookAliasPattern: 'subtoken-{padded}',
+  outlookAliasMaxPerAccount: 3,
+  hotmailAliasUsage: {},
+};
+const allocated = [];
+
+function generateRandomSuffix() { return 'rnd001'; }
+async function getState() {
+  return state;
+}
+async function checkOutlookAliasSubscriptionUsage() {
+  return { used: false, checked: true };
+}
+async function setHotmailAliasUsageEntry(account, aliasEmail, updates) {
+  allocated.push(aliasEmail);
+  state.hotmailAliasUsage = {
+    [account.id]: {
+      aliases: {
+        ...(state.hotmailAliasUsage[account.id]?.aliases || {}),
+        [aliasEmail.toLowerCase()]: { email: aliasEmail, used: Boolean(updates.used) },
+      },
+    },
+  };
+}
+async function setEmailState(email) {
+  state.email = email;
+}
+
+${extractFunction('normalizeOutlookAliasMaxPerAccount')}
+${extractFunction('normalizeOutlookAliasPattern')}
+${extractFunction('normalizeEmailAddressForMatch')}
+${extractFunction('isHotmailAliasEnabled')}
+${extractFunction('getHotmailAliasUsageKey')}
+${extractFunction('normalizeHotmailAliasUsageEntry')}
+${extractFunction('normalizeHotmailAliasUsage')}
+${extractFunction('getHotmailAliasEntriesForAccount')}
+${extractFunction('parseEmailAddressParts')}
+${extractFunction('isOutlookPlusAliasForAccount')}
+${extractFunction('buildOutlookPlusAliasEmail')}
+${extractFunction('buildOutlookPayPalAliasEmail')}
+${extractFunction('sanitizeOutlookAliasTag')}
+${extractFunction('buildOutlookAliasTagFromPattern')}
+${extractFunction('buildOutlookAliasEmailFromPattern')}
+${extractFunction('getOutlookPayPalAliasIndex')}
+${extractFunction('getOutlookAliasPatternIndex')}
+${extractFunction('isHotmailAliasUsed')}
+${extractFunction('ensureOutlookAliasForHotmailAccount')}
+
+return {
+  ensureOutlookAliasForHotmailAccount,
+  buildOutlookAliasEmailFromPattern,
+  get allocated() {
+    return allocated;
+  },
+  get state() {
+    return state;
+  },
+};
+`)();
+
+  const first = await api.ensureOutlookAliasForHotmailAccount({ id: 'hm-1', email: 'user@hotmail.com' });
+  api.state.email = '';
+  api.state.hotmailAliasUsage['hm-1'].aliases[first.toLowerCase()].used = true;
+  const second = await api.ensureOutlookAliasForHotmailAccount({ id: 'hm-1', email: 'user@hotmail.com' });
+
+  assert.equal(first, 'user+subtoken-001@hotmail.com');
+  assert.equal(second, 'user+subtoken-002@hotmail.com');
+  assert.equal(
+    api.buildOutlookAliasEmailFromPattern('user@hotmail.com', 4, 'yan-{random}'),
+    'user+yan-rnd001@hotmail.com'
+  );
+  assert.deepEqual(api.allocated, [
+    'user+subtoken-001@hotmail.com',
+    'user+subtoken-002@hotmail.com',
   ]);
 });
 

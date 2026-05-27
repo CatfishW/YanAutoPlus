@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {
   getIcloudForwardMailConfig,
+  normalizeGmailMailboxUrl,
   normalizeIcloudForwardMailProvider,
   normalizeIcloudTargetMailboxType,
 } = require('../mail-provider-utils.js');
@@ -64,9 +65,12 @@ const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
+const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
 const getSharedIcloudForwardMailConfig = shared.getIcloudForwardMailConfig;
 const normalizeIcloudTargetMailboxType = shared.normalizeIcloudTargetMailboxType;
 const normalizeIcloudForwardMailProvider = shared.normalizeIcloudForwardMailProvider;
+const normalizeGmailMailboxUrl = shared.normalizeGmailMailboxUrl;
 function normalizeIcloudHost(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === 'icloud.com' || normalized === 'icloud.com.cn' ? normalized : '';
@@ -86,6 +90,7 @@ ${bundle}
 return { getMailConfig };
 `)({
     getIcloudForwardMailConfig,
+    normalizeGmailMailboxUrl,
     normalizeIcloudForwardMailProvider,
     normalizeIcloudTargetMailboxType,
   });
@@ -100,6 +105,7 @@ const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
 const PERSISTED_SETTING_DEFAULTS = { mailProvider: '163' };
 ${bundle}
 return { normalizeMailProvider };
@@ -107,6 +113,7 @@ return { normalizeMailProvider };
 
   assert.equal(api.normalizeMailProvider('icloud'), 'icloud');
   assert.equal(api.normalizeMailProvider('ICLOUD'), 'icloud');
+  assert.equal(api.normalizeMailProvider('gmail'), 'gmail');
   assert.equal(api.normalizeMailProvider('cloudmail'), 'cloudmail');
 });
 
@@ -151,6 +158,35 @@ test('getMailConfig keeps provider metadata for 2925 mailboxes', () => {
     label: '2925 邮箱',
     inject: ['content/utils.js', 'content/operation-delay.js', 'content/mail-2925.js'],
     injectSource: 'mail-2925',
+  });
+});
+
+test('getMailConfig returns gmail mail tab config', () => {
+  const api = createGetMailConfigApi();
+
+  assert.deepEqual(api.getMailConfig({
+    mailProvider: 'gmail',
+  }), {
+    source: 'gmail-mail',
+    url: 'https://mail.google.com/mail/u/0/#inbox',
+    label: 'Gmail 邮箱',
+    inject: ['content/activation-utils.js', 'content/utils.js', 'content/gmail-mail.js'],
+    injectSource: 'gmail-mail',
+  });
+});
+
+test('getMailConfig uses configured Gmail mailbox target', () => {
+  const api = createGetMailConfigApi();
+
+  assert.deepEqual(api.getMailConfig({
+    mailProvider: 'gmail',
+    gmailMailboxUrl: '1',
+  }), {
+    source: 'gmail-mail',
+    url: 'https://mail.google.com/mail/u/1/#inbox',
+    label: 'Gmail 邮箱',
+    inject: ['content/activation-utils.js', 'content/utils.js', 'content/gmail-mail.js'],
+    injectSource: 'gmail-mail',
   });
 });
 

@@ -2,20 +2,24 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-function loadIpProxyCore({ accountListEnabled = true } = {}) {
+function loadIpProxyCore({ accountListEnabled = true, fetchImpl = globalThis.fetch } = {}) {
   const providerSource = fs.readFileSync('background/ip-proxy-provider-711proxy.js', 'utf8');
   const coreSource = fs.readFileSync('background/ip-proxy-core.js', 'utf8');
-  return new Function(`
+  return new Function('fetchImpl', `
 const self = {};
 const chrome = {};
+const fetch = fetchImpl;
 let __state = {};
 const DEFAULT_IP_PROXY_SERVICE = '711proxy';
-const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy'];
-const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy'];
+const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy', 'clash'];
+const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy', 'clash'];
 const DEFAULT_IP_PROXY_MODE = 'account';
 const IP_PROXY_MODE_VALUES = ['api', 'account'];
 const DEFAULT_IP_PROXY_PROTOCOL = 'http';
 const IP_PROXY_PROTOCOL_VALUES = ['http', 'https', 'socks4', 'socks5'];
+const DEFAULT_CLASH_PROXY_HOST = '127.0.0.1';
+const DEFAULT_CLASH_PROXY_PORT = '7890';
+const DEFAULT_CLASH_PROXY_PROTOCOL = 'http';
 const IP_PROXY_FETCH_TIMEOUT_MS = 20000;
 const IP_PROXY_SETTINGS_SCOPE = 'regular';
 const IP_PROXY_BYPASS_LIST = ['<local>', 'localhost', '127.0.0.1'];
@@ -47,13 +51,17 @@ function broadcastDataUpdate() {}
 async function addLog() {}
 ${coreSource}
 return {
+  applyIpProxySettingsFromState,
   applyExitRegionExpectation,
+  buildClashUsSelectionPlan,
   buildIpProxyPacScript,
   chrome,
   createAutomationScopedTab,
   buildIpProxyRoutingStatePatch,
   applyTargetReachabilityExpectation,
   getAccountModeProxyPoolFromState,
+  normalizeIpProxyProviderValue,
+  normalizeIpProxyServiceProfiles,
   normalizeIpProxyAccountList,
   normalizeProxyPoolEntries,
   parseProxyExitProbePayload,
@@ -63,10 +71,11 @@ return {
   resolveExitProbeEndpoints,
   resolveIpProxyAutoSwitchThreshold,
   resolveTargetReachabilityEndpoints,
+  isClashUsNodeName,
   setTestState(nextState = {}) { __state = { ...(nextState || {}) }; },
   shouldEnableIpProxyLeakGuardForStatus,
 };
-`)();
+`)(fetchImpl);
 }
 
 test('IP proxy parser ignores disabled lines and normalizes proxy entries', () => {
@@ -207,6 +216,169 @@ test('711 fixed-account mode applies region and sticky session parameters', () =
   assert.match(pool[0].username, /region-US/);
   assert.match(pool[0].username, /session-sticky_001/);
   assert.match(pool[0].username, /sessTime-30/);
+});
+
+test('Clash proxy service defaults to local dynamic global endpoint', () => {
+  const api = loadIpProxyCore();
+
+  assert.equal(api.normalizeIpProxyProviderValue('clash'), 'clash');
+  const profiles = api.normalizeIpProxyServiceProfiles({}, {});
+
+  assert.equal(profiles.clash.mode, 'account');
+  assert.equal(profiles.clash.host, '127.0.0.1');
+  assert.equal(profiles.clash.port, '7890');
+  assert.equal(profiles.clash.protocol, 'http');
+
+  const pool = api.getAccountModeProxyPoolFromState({
+    ipProxyService: 'clash',
+    ipProxyMode: 'account',
+    ipProxyHost: profiles.clash.host,
+    ipProxyPort: profiles.clash.port,
+    ipProxyProtocol: profiles.clash.protocol,
+  }, 'clash');
+
+  assert.equal(pool.length, 1);
+  assert.deepEqual(pool[0], {
+    host: '127.0.0.1',
+    port: 7890,
+    username: '',
+    password: '',
+    protocol: 'http',
+    region: 'US',
+    provider: 'clash',
+  });
+});
+
+test('Clash US-node matcher and selection plan avoid non-US nodes', () => {
+  const api = loadIpProxyCore();
+  const plan = api.buildClashUsSelectionPlan({
+    proxies: {
+      GLOBAL: { type: 'Selector', now: '🇯🇵 JP Tokyo', all: ['🇯🇵 JP Tokyo', '🇺🇸 US Los Angeles'] },
+      '🚀 节点选择': { type: 'Selector', now: '🇯🇵 JP Tokyo', all: ['🇯🇵 JP Tokyo', '🇺🇸 US Los Angeles'] },
+      '🇯🇵 JP Tokyo': { type: 'Trojan' },
+      '🇺🇸 US Los Angeles': { type: 'Trojan' },
+    },
+  });
+
+  assert.equal(api.isClashUsNodeName('status check'), false);
+  assert.equal(api.isClashUsNodeName('business proxy'), false);
+  assert.equal(api.isClashUsNodeName('United States 01'), true);
+  assert.equal(api.isClashUsNodeName('🇺🇸 US Los Angeles'), true);
+  assert.equal(plan.selectedNodeNames.includes('🇯🇵 JP Tokyo'), false);
+  assert.deepEqual(
+    plan.selections.filter((selection) => selection.groupName === 'GLOBAL'),
+    [{ groupName: 'GLOBAL', choiceName: '🇺🇸 US Los Angeles' }]
+  );
+});
+
+test('Clash apply selects a US node through local controller before applying PAC', async () => {
+  const fetchCalls = [];
+  const api = loadIpProxyCore({
+    fetchImpl: async (url, options = {}) => {
+      fetchCalls.push({ url: String(url), method: options.method || 'GET', body: options.body || '' });
+      if (String(url).endsWith('/proxies') && String(options.method || 'GET').toUpperCase() === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            proxies: {
+              GLOBAL: { type: 'Selector', now: '🇯🇵 JP Tokyo', all: ['🇯🇵 JP Tokyo', '🇺🇸 US Los Angeles'] },
+              '🇯🇵 JP Tokyo': { type: 'Trojan' },
+              '🇺🇸 US Los Angeles': { type: 'Trojan' },
+            },
+          }),
+        };
+      }
+      if (/\/proxies\/GLOBAL$/.test(String(url)) && String(options.method || '').toUpperCase() === 'PUT') {
+        return { ok: true, status: 204, text: async () => '' };
+      }
+      return { ok: false, status: 404, text: async () => 'not found' };
+    },
+  });
+  api.chrome.proxy = {
+    settings: {
+      clear(_details, callback) { callback(); },
+      set(details, callback) {
+        fetchCalls.push({ url: 'chrome.proxy.settings.set', method: 'SET', body: JSON.stringify(details) });
+        callback();
+      },
+      get(_details, callback) {
+        callback({
+          levelOfControl: 'controlled_by_this_extension',
+          value: {
+            mode: 'pac_script',
+            pacScript: { data: 'function FindProxyForURL(){ return "PROXY 127.0.0.1:7890"; }' },
+          },
+        });
+      },
+    },
+    onProxyError: { addListener() {} },
+  };
+  api.chrome.webRequest = {
+    onAuthRequired: { addListener() {} },
+    handlerBehaviorChanged(callback) { callback?.(); },
+  };
+  api.chrome.browsingData = { remove: async () => {} };
+  api.chrome.runtime = {};
+
+  const status = await api.applyIpProxySettingsFromState({
+    ipProxyEnabled: true,
+    ipProxyService: 'clash',
+    ipProxyMode: 'account',
+    ipProxyHost: '127.0.0.1',
+    ipProxyPort: '7890',
+    ipProxyProtocol: 'http',
+  }, { skipExitProbe: true });
+
+  const putCall = fetchCalls.find((call) => call.method === 'PUT');
+  assert.equal(status.applied, true);
+  assert.equal(status.region, 'US');
+  assert.equal(status.clashNode, '🇺🇸 US Los Angeles');
+  assert.equal(status.warning, '');
+  assert.ok(putCall);
+  assert.match(putCall.body, /US Los Angeles/);
+  assert.doesNotMatch(putCall.body, /JP Tokyo/);
+});
+
+test('Clash controller failures warn but keep local proxy flow applied', async () => {
+  const api = loadIpProxyCore({
+    fetchImpl: async () => {
+      throw new Error('connection refused');
+    },
+  });
+  api.chrome.proxy = {
+    settings: {
+      clear(_details, callback) { callback(); },
+      set(_details, callback) { callback(); },
+      get(_details, callback) {
+        callback({
+          levelOfControl: 'controlled_by_this_extension',
+          value: {
+            mode: 'pac_script',
+            pacScript: { data: 'function FindProxyForURL(){ return "PROXY 127.0.0.1:7890"; }' },
+          },
+        });
+      },
+    },
+    onProxyError: { addListener() {} },
+  };
+  api.chrome.webRequest = {
+    onAuthRequired: { addListener() {} },
+  };
+  api.chrome.runtime = {};
+
+  const status = await api.applyIpProxySettingsFromState({
+    ipProxyEnabled: true,
+    ipProxyService: 'clash',
+    ipProxyMode: 'account',
+    ipProxyHost: '127.0.0.1',
+    ipProxyPort: '7890',
+    ipProxyProtocol: 'http',
+  }, { skipExitProbe: true });
+
+  assert.equal(status.applied, true);
+  assert.equal(status.region, 'US');
+  assert.match(status.warning, /Clash 控制器不可用/);
 });
 
 test('IP proxy PAC keeps local traffic direct and routes target traffic through proxy', () => {

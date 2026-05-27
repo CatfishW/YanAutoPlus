@@ -71,6 +71,8 @@ const rowMail2925Mode = createRow();
 const rowMail2925PoolSettings = createRow();
 const rowCustomMailProviderPool = createRow();
 const rowEmailPrefix = createRow();
+const rowGmailAliasPattern = createRow();
+const rowGmailMailboxUrl = createRow();
 const rowInbucketHost = createRow();
 const rowInbucketMailbox = createRow();
 const rowEmailGenerator = createRow();
@@ -94,6 +96,7 @@ const luckmailSection = createRow();
 const icloudSection = createRow();
 const labelEmailPrefix = { textContent: '' };
 const inputEmailPrefix = { placeholder: '', style: { display: '' }, readOnly: false };
+const inputGmailAliasPattern = { value: '' };
 const labelMail2925UseAccountPool = createRow();
 const selectMail2925PoolAccount = { style: { display: 'none' }, disabled: false };
 const btnFetchEmail = { hidden: false, disabled: false, textContent: '' };
@@ -129,7 +132,10 @@ function isLuckmailProvider() { return false; }
 function isCustomMailProvider() { return false; }
 function isIcloudMailProvider() { return false; }
 function usesCustomMailProviderPool() { return false; }
-function usesGeneratedAliasMailProvider() { return false; }
+function usesGeneratedAliasMailProvider(provider = selectMailProvider.value) {
+  return String(provider || '').trim().toLowerCase() === 'gmail'
+    && String(selectEmailGenerator.value || '').trim().toLowerCase() === 'gmail-alias';
+}
 function getSelectedMail2925Mode() { return 'provide'; }
 function getSelectedCloudflareTempEmailLookupMode() { return 'receive-mailbox'; }
 function getManagedAliasProviderUiCopy() { return null; }
@@ -169,6 +175,8 @@ ${bundle}
 return {
   updateMailProviderUI,
   rowEmailGenerator,
+  rowGmailAliasPattern,
+  rowGmailMailboxUrl,
   eduSubtokenMailSection,
   rowEduSubtokenMailAccountPattern,
   rowEduSubtokenMailAccountPassword,
@@ -185,6 +193,7 @@ function buildNormalizeSupportedMailProviderApi() {
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUD_MAIL_PROVIDER = 'cloudmail';
+const GMAIL_PROVIDER = 'gmail';
 const EDU_SUBTOKEN_MAIL_PROVIDER = 'edu-subtoken-mail-api';
 ${bundle}
 return {
@@ -210,6 +219,19 @@ test('sidepanel html keeps cloudmail as a selectable mail provider', () => {
     html,
     /<select id="select-mail-provider"[\s\S]*?<option value="cloudmail">Cloud Mail<\/option>/
   );
+});
+
+test('sidepanel html keeps gmail as a selectable mail provider with alias rule input', () => {
+  const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
+  assert.match(
+    html,
+    /<select id="select-mail-provider"[\s\S]*?<option value="gmail">Gmail 邮箱<\/option>/
+  );
+  assert.match(html, /id="row-gmail-alias-pattern"[^>]*style="display:none;"/);
+  assert.match(html, /id="input-gmail-alias-pattern"/);
+  assert.match(html, /id="row-gmail-mailbox-url"[^>]*style="display:none;"/);
+  assert.match(html, /id="input-gmail-mailbox-url"/);
+  assert.match(html, /多账号时填写 Gmail 序号、邮箱或完整收件箱 URL/);
 });
 
 test('sidepanel html keeps edu subtoken as a selectable mail provider', () => {
@@ -299,9 +321,38 @@ test('updateMailProviderUI locks edu subtoken provider to its own generator', ()
   );
 });
 
+test('updateMailProviderUI shows gmail alias customization when gmail alias generator is selected', () => {
+  const api = buildUpdateMailProviderUiApi();
+
+  api.selectMailProvider.value = 'gmail';
+  api.selectEmailGenerator.value = 'gmail-alias';
+  api.updateMailProviderUI();
+
+  assert.equal(api.rowEmailGenerator.style.display, '');
+  assert.equal(api.rowGmailAliasPattern.style.display, '');
+  assert.equal(api.rowGmailMailboxUrl.style.display, '');
+  assert.equal(api.selectEmailGenerator.disabled, false);
+  assert.deepEqual(
+    api.selectEmailGenerator.options.map((option) => option.hidden),
+    [false, true, false, true, true, true, true, true]
+  );
+});
+
+test('updateMailProviderUI hides gmail alias customization when gmail custom pool is selected', () => {
+  const api = buildUpdateMailProviderUiApi();
+
+  api.selectMailProvider.value = 'gmail';
+  api.selectEmailGenerator.value = 'custom-pool';
+  api.updateMailProviderUI();
+
+  assert.equal(api.rowGmailAliasPattern.style.display, 'none');
+  assert.equal(api.rowGmailMailboxUrl.style.display, '');
+});
+
 test('normalizeSupportedMailProvider keeps cloudmail provider available', () => {
   const api = buildNormalizeSupportedMailProviderApi();
 
+  assert.equal(api.normalizeSupportedMailProvider('gmail'), 'gmail');
   assert.equal(api.normalizeSupportedMailProvider('cloudmail'), 'cloudmail');
   assert.equal(api.normalizeSupportedMailProvider('edu-subtoken-mail-api'), 'edu-subtoken-mail-api');
   assert.equal(api.normalizeSupportedMailProvider('cloudflare-temp-email'), 'cloudflare-temp-email');

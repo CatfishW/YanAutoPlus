@@ -26,7 +26,10 @@
       reuseOrCreateTab,
       sendToContentScript,
       setEmailState,
+      setPersistentSettings = null,
+      setState = null,
       throwIfStopped,
+      getNextGmailAliasNumberAfterGeneration = null,
     } = deps;
 
     async function persistResolvedEmailState(state = null, email, options = {}) {
@@ -255,6 +258,12 @@
       if (options.gmailBaseEmail !== undefined) {
         mergedState.gmailBaseEmail = String(options.gmailBaseEmail || '').trim();
       }
+      if (options.gmailAliasPattern !== undefined) {
+        mergedState.gmailAliasPattern = String(options.gmailAliasPattern || '').trim();
+      }
+      if (options.gmailMailboxUrl !== undefined) {
+        mergedState.gmailMailboxUrl = String(options.gmailMailboxUrl || '').trim();
+      }
       if (options.mail2925BaseEmail !== undefined) {
         mergedState.mail2925BaseEmail = String(options.mail2925BaseEmail || '').trim();
       }
@@ -276,10 +285,22 @@
       }
 
       const email = buildGeneratedAliasEmail(mergedState);
+      const nextGmailAliasNumber = typeof getNextGmailAliasNumberAfterGeneration === 'function'
+        ? getNextGmailAliasNumberAfterGeneration(mergedState)
+        : null;
       await persistResolvedEmailState(mergedState, email, {
         source: `generated:${provider || 'alias'}`,
         preserveAccountIdentity: Boolean(options?.preserveAccountIdentity),
       });
+      if (provider === 'gmail' && nextGmailAliasNumber !== null) {
+        const counterPatch = { gmailAliasNextNumber: nextGmailAliasNumber };
+        if (typeof setPersistentSettings === 'function') {
+          await setPersistentSettings(counterPatch);
+        }
+        if (typeof setState === 'function') {
+          await setState(counterPatch);
+        }
+      }
       await addLog(`${provider === 'gmail' ? 'Gmail +tag' : '2925'}：已生成 ${email}`, 'ok');
       return email;
     }
@@ -300,11 +321,20 @@
       if (options.gmailBaseEmail !== undefined) {
         mergedState.gmailBaseEmail = String(options.gmailBaseEmail || '').trim();
       }
+      if (options.gmailAliasPattern !== undefined) {
+        mergedState.gmailAliasPattern = String(options.gmailAliasPattern || '').trim();
+      }
+      if (options.gmailMailboxUrl !== undefined) {
+        mergedState.gmailMailboxUrl = String(options.gmailMailboxUrl || '').trim();
+      }
       if (options.mail2925BaseEmail !== undefined) {
         mergedState.mail2925BaseEmail = String(options.mail2925BaseEmail || '').trim();
       }
       if (options.customEmailPool !== undefined) {
         mergedState.customEmailPool = options.customEmailPool;
+      }
+      if (options.icloudAliasLabelPattern !== undefined) {
+        mergedState.icloudAliasLabelPattern = String(options.icloudAliasLabelPattern || '').trim();
       }
       if (generator === 'custom') {
         throw new Error('当前邮箱生成方式为自定义邮箱，请直接填写注册邮箱。');

@@ -186,6 +186,7 @@ const inputCodex2ApiAdminKey = document.getElementById('input-codex2api-admin-ke
 const rowCustomPassword = document.getElementById('row-custom-password');
 const rowPlusMode = document.getElementById('row-plus-mode');
 const inputPlusModeEnabled = document.getElementById('input-plus-mode-enabled');
+const plusModeCaption = document.getElementById('plus-mode-caption');
 const rowPlusPaymentMethod = document.getElementById('row-plus-payment-method');
 const selectPlusPaymentMethod = document.getElementById('select-plus-payment-method');
 const rowPayPalAccount = document.getElementById('row-paypal-account');
@@ -373,6 +374,8 @@ const selectIcloudTargetMailboxType = document.getElementById('select-icloud-tar
 const rowIcloudForwardMailProvider = document.getElementById('row-icloud-forward-mail-provider');
 const selectIcloudForwardMailProvider = document.getElementById('select-icloud-forward-mail-provider');
 const selectIcloudFetchMode = document.getElementById('select-icloud-fetch-mode');
+const rowIcloudAliasLabelPattern = document.getElementById('row-icloud-alias-label-pattern');
+const inputIcloudAliasLabelPattern = document.getElementById('input-icloud-alias-label-pattern');
 const checkboxAutoDeleteIcloud = document.getElementById('checkbox-auto-delete-icloud');
 const inputIcloudSearch = document.getElementById('input-icloud-search');
 const selectIcloudFilter = document.getElementById('select-icloud-filter');
@@ -393,6 +396,8 @@ const rowHotmailAliasEnabled = document.getElementById('row-hotmail-alias-enable
 const inputHotmailAliasEnabled = document.getElementById('input-hotmail-alias-enabled');
 const rowOutlookAliasMax = document.getElementById('row-outlook-alias-max');
 const inputOutlookAliasMaxPerAccount = document.getElementById('input-outlook-alias-max-per-account');
+const rowOutlookAliasPattern = document.getElementById('row-outlook-alias-pattern');
+const inputOutlookAliasPattern = document.getElementById('input-outlook-alias-pattern');
 const inputHotmailEmail = document.getElementById('input-hotmail-email');
 const inputHotmailClientId = document.getElementById('input-hotmail-client-id');
 const inputHotmailPassword = document.getElementById('input-hotmail-password');
@@ -444,6 +449,10 @@ const luckmailList = document.getElementById('luckmail-list');
 const rowEmailPrefix = document.getElementById('row-email-prefix');
 const labelEmailPrefix = document.getElementById('label-email-prefix');
 const inputEmailPrefix = document.getElementById('input-email-prefix');
+const rowGmailAliasPattern = document.getElementById('row-gmail-alias-pattern');
+const inputGmailAliasPattern = document.getElementById('input-gmail-alias-pattern');
+const rowGmailMailboxUrl = document.getElementById('row-gmail-mailbox-url');
+const inputGmailMailboxUrl = document.getElementById('input-gmail-mailbox-url');
 const selectMail2925PoolAccount = document.getElementById('select-mail2925-pool-account');
 const inputMail2925UseAccountPool = document.getElementById('input-mail2925-use-account-pool');
 const labelMail2925UseAccountPool = document.getElementById('label-mail2925-use-account-pool');
@@ -634,7 +643,6 @@ const GPC_HELPER_PORTAL_URL = '';
 const GPC_HELPER_PHONE_MODE_AUTO = 'auto';
 const GPC_HELPER_PHONE_MODE_MANUAL = 'manual';
 const DEFAULT_PLUS_PAYMENT_METHOD = PLUS_PAYMENT_METHOD_PAYPAL;
-const FIXED_PLUS_MODE_ENABLED = true;
 const GUIDE_REPOSITORY_URL = 'https://github.com/CatfishW/YanAutoPlus';
 const SIGNUP_METHOD_EMAIL = 'email';
 const SIGNUP_METHOD_PHONE = 'phone';
@@ -737,7 +745,7 @@ const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
   PHONE_SMS_PROVIDER_GRIZZLYSMS,
   PHONE_SMS_PROVIDER_CHATGPT_API,
 ]);
-const DEFAULT_SMS_POOL_API_KEY = 'oIzju8HvZAzzNdO4ucIL2hi5XECAim4P';
+const DEFAULT_SMS_POOL_API_KEY = '';
 const DEFAULT_SMS_POOL_BASE_URL = 'https://api.smspool.net';
 const DEFAULT_SMS_POOL_COUNTRY_ID = 'US';
 const DEFAULT_SMS_POOL_COUNTRY_LABEL = 'United States';
@@ -1227,6 +1235,7 @@ const CPA_PHONE_SIGNUP_WARNING_MESSAGE = 'CPA 未适配手机号注册模式，�
 const HOTMAIL_SERVICE_MODE_REMOTE = 'remote';
 const HOTMAIL_SERVICE_MODE_LOCAL = 'local';
 const ICLOUD_PROVIDER = 'icloud';
+const DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN = 'YanAutoPlus {date}';
 const GMAIL_PROVIDER = 'gmail';
 const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
 const HOTMAIL_PROVIDER = 'hotmail-api';
@@ -1248,7 +1257,7 @@ const DEFAULT_SMS_VERIFICATION_NUMBER_BASE_URL = 'https://sms-verification-numbe
 const DEFAULT_SMS_VERIFICATION_NUMBER_SERVICE_CODE = 'dr';
 const DEFAULT_SMS_VERIFICATION_NUMBER_COUNTRY_ID = DEFAULT_HERO_SMS_COUNTRY_ID;
 const DEFAULT_SMS_VERIFICATION_NUMBER_COUNTRY_LABEL = DEFAULT_HERO_SMS_COUNTRY_LABEL;
-const DEFAULT_SMSPOOL_COUNTRY_ID = 1;
+const DEFAULT_SMSPOOL_COUNTRY_ID = DEFAULT_SMS_POOL_COUNTRY_ID;
 const DEFAULT_SMSPOOL_COUNTRY_LABEL = 'United States';
 const DEFAULT_FIVE_SIM_COUNTRY_ID = 'vietnam';
 const DEFAULT_FIVE_SIM_COUNTRY_LABEL = '越南 (Vietnam)';
@@ -1268,12 +1277,16 @@ const NEX_SMS_FALLBACK_COUNTRY_ITEMS = Object.freeze([
   { id: 7, label: 'Malaysia (#7)', searchText: 'Malaysia 7 MY' },
 ]);
 const DEFAULT_IP_PROXY_SERVICE = '711proxy';
-const SUPPORTED_IP_PROXY_SERVICES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy'];
-const IP_PROXY_ENABLED_SERVICES = ['711proxy'];
+const IP_PROXY_SERVICE_CLASH = 'clash';
+const SUPPORTED_IP_PROXY_SERVICES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy', IP_PROXY_SERVICE_CLASH];
+const IP_PROXY_ENABLED_SERVICES = ['711proxy', IP_PROXY_SERVICE_CLASH];
 const DEFAULT_IP_PROXY_MODE = 'account';
 const SUPPORTED_IP_PROXY_MODES = ['api', 'account'];
 const DEFAULT_IP_PROXY_PROTOCOL = 'http';
 const SUPPORTED_IP_PROXY_PROTOCOLS = ['http', 'https', 'socks4', 'socks5'];
+const DEFAULT_CLASH_PROXY_HOST = '127.0.0.1';
+const DEFAULT_CLASH_PROXY_PORT = '7890';
+const DEFAULT_CLASH_PROXY_PROTOCOL = 'http';
 const IP_PROXY_API_MODE_ENABLED = false;
 const IP_PROXY_ACCOUNT_LIST_ENABLED = false;
 
@@ -1445,10 +1458,22 @@ function getManagedAliasBaseEmailForProvider(provider = selectMailProvider.value
 function buildManagedAliasBaseEmailPayload(state = latestState) {
   const payload = {
     gmailBaseEmail: String(state?.gmailBaseEmail || '').trim(),
+    gmailAliasPattern: String(state?.gmailAliasPattern || '').trim(),
+    gmailMailboxUrl: String(state?.gmailMailboxUrl || '').trim(),
     mail2925BaseEmail: String(state?.mail2925BaseEmail || '').trim(),
     mail2925UseAccountPool: Boolean(state?.mail2925UseAccountPool),
+    icloudAliasLabelPattern: normalizeIcloudAliasLabelPattern(state?.icloudAliasLabelPattern),
     emailPrefix: '',
   };
+  if (inputIcloudAliasLabelPattern) {
+    payload.icloudAliasLabelPattern = normalizeIcloudAliasLabelPattern(inputIcloudAliasLabelPattern.value);
+  }
+  if (inputGmailAliasPattern) {
+    payload.gmailAliasPattern = inputGmailAliasPattern.value.trim();
+  }
+  if (inputGmailMailboxUrl) {
+    payload.gmailMailboxUrl = inputGmailMailboxUrl.value.trim();
+  }
   const key = getManagedAliasBaseEmailKey();
   if (key) {
     if (key === 'mail2925BaseEmail' && isMail2925AccountPoolEnabled(state)) {
@@ -1763,6 +1788,10 @@ const normalizeIcloudFetchMode = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === 'always_new' ? 'always_new' : 'reuse_existing';
 };
+const normalizeIcloudAliasLabelPattern = (value = '') => {
+  const normalized = String(value || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  return normalized || DEFAULT_ICLOUD_ALIAS_LABEL_PATTERN;
+};
 const normalizeIcloudTargetMailboxType = window.MailProviderUtils?.normalizeIcloudTargetMailboxType
   || ((value) => String(value || '').trim().toLowerCase() === 'forward-mailbox'
     ? 'forward-mailbox'
@@ -1834,6 +1863,11 @@ const IP_PROXY_SERVICE_LOGIN_CONFIGS = {
     label: '711Proxy',
     url: 'https://www.711proxy.com/',
     buttonLabel: '注册',
+  },
+  clash: {
+    label: 'Clash 动态全局代理',
+    url: '',
+    buttonLabel: '配置',
   },
 };
 
@@ -3291,6 +3325,10 @@ function normalizeOutlookAliasMaxPerAccount(value) {
   return Math.min(50, Math.max(1, Math.floor(numeric)));
 }
 
+function normalizeOutlookAliasPattern(value) {
+  return String(value || '').trim() || 'PayPal{n}';
+}
+
 function normalizeHotmailAliasEnabledValue(value) {
   return Boolean(value);
 }
@@ -3302,6 +3340,12 @@ function normalizeSupportedMailProvider(value = '') {
   }
   if (normalized === CLOUD_MAIL_PROVIDER) {
     return CLOUD_MAIL_PROVIDER;
+  }
+  if (normalized === GMAIL_PROVIDER) {
+    return GMAIL_PROVIDER;
+  }
+  if (normalized === ICLOUD_PROVIDER) {
+    return ICLOUD_PROVIDER;
   }
   if (normalized === EDU_SUBTOKEN_MAIL_PROVIDER) {
     return EDU_SUBTOKEN_MAIL_PROVIDER;
@@ -3899,7 +3943,7 @@ function collectSettingsPayload() {
     ? normalizeIpProxyService
     : ((value = '') => {
       const normalized = String(value || '').trim().toLowerCase();
-      return ['711proxy'].includes(normalized)
+      return ['711proxy', 'clash'].includes(normalized)
         ? normalized
         : '711proxy';
     });
@@ -4017,7 +4061,7 @@ function collectSettingsPayload() {
       const raw = (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue))
         ? rawValue
         : {};
-      const services = ['711proxy'];
+      const services = ['711proxy', 'clash'];
       const fallbackProfile = {
         mode: normalizeIpProxyModeSafe(fallbackState?.ipProxyMode || 'account'),
         apiUrl: String(fallbackState?.ipProxyApiUrl || '').trim(),
@@ -4701,9 +4745,6 @@ function collectSettingsPayload() {
   const cloudflareTempEmailReceiveMailboxNormalizer = typeof normalizeCloudflareTempEmailReceiveMailboxValue === 'function'
     ? normalizeCloudflareTempEmailReceiveMailboxValue
     : ((value) => String(value || '').trim());
-  const fixedPlusModeEnabled = typeof FIXED_PLUS_MODE_ENABLED === 'boolean'
-    ? FIXED_PLUS_MODE_ENABLED
-    : true;
   return {
     ...(contributionModeEnabled ? {} : {
       panelMode: effectivePanelMode,
@@ -4751,7 +4792,7 @@ function collectSettingsPayload() {
     ipProxyRegion: currentIpProxyServiceProfile.region,
     codex2apiUrl: inputCodex2ApiUrl.value.trim(),
     codex2apiAdminKey: inputCodex2ApiAdminKey.value.trim(),
-    plusModeEnabled: fixedPlusModeEnabled,
+    plusModeEnabled: effectivePlusModeEnabled,
     plusPaymentMethod,
     paypalEmail: String(currentPayPalAccount?.email || latestState?.paypalEmail || '').trim(),
     paypalPassword: String(currentPayPalAccount?.password || latestState?.paypalPassword || ''),
@@ -4840,6 +4881,9 @@ function collectSettingsPayload() {
     hotmailAliasEnabled: typeof inputHotmailAliasEnabled !== 'undefined' && inputHotmailAliasEnabled
       ? normalizeHotmailAliasEnabledValue(inputHotmailAliasEnabled.checked)
       : false,
+    outlookAliasPattern: typeof inputOutlookAliasPattern !== 'undefined' && inputOutlookAliasPattern
+      ? normalizeOutlookAliasPattern(inputOutlookAliasPattern.value)
+      : 'PayPal{n}',
     outlookAliasMaxPerAccount: typeof inputOutlookAliasMaxPerAccount !== 'undefined' && inputOutlookAliasMaxPerAccount
       ? normalizeOutlookAliasMaxPerAccount(inputOutlookAliasMaxPerAccount.value)
       : 5,
@@ -6571,9 +6615,7 @@ function getSelectedHeroSmsCountryOption() {
   }
   return isFiveSimProviderSelected()
     ? { id: DEFAULT_FIVE_SIM_COUNTRY_ID, label: DEFAULT_FIVE_SIM_COUNTRY_LABEL }
-    : (getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_SMSPOOL
-      ? { id: DEFAULT_SMSPOOL_COUNTRY_ID, label: DEFAULT_SMSPOOL_COUNTRY_LABEL }
-      : { id: DEFAULT_HERO_SMS_COUNTRY_ID, label: DEFAULT_HERO_SMS_COUNTRY_LABEL });
+    : { id: DEFAULT_HERO_SMS_COUNTRY_ID, label: DEFAULT_HERO_SMS_COUNTRY_LABEL };
 }
 
 function getFiveSimCountryOptionLabel(code = '') {
@@ -6881,11 +6923,7 @@ function syncHeroSmsFallbackSelectionOrderFromSelect(options = {}) {
   if (!countrySelect) {
     const defaultCountry = isFiveSimProviderSelected()
       ? { id: DEFAULT_FIVE_SIM_COUNTRY_ID, label: DEFAULT_FIVE_SIM_COUNTRY_LABEL }
-      : (
-        getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_SMSPOOL
-          ? { id: normalizeHeroSmsCountryId(DEFAULT_SMSPOOL_COUNTRY_ID), label: DEFAULT_SMSPOOL_COUNTRY_LABEL }
-          : { id: normalizeHeroSmsCountryId(DEFAULT_HERO_SMS_COUNTRY_ID), label: DEFAULT_HERO_SMS_COUNTRY_LABEL }
-      );
+      : { id: normalizeHeroSmsCountryId(DEFAULT_HERO_SMS_COUNTRY_ID), label: DEFAULT_HERO_SMS_COUNTRY_LABEL };
     heroSmsCountrySelectionOrder = [defaultCountry.id];
     renderHeroSmsCountryFallbackOrder([defaultCountry]);
     return [defaultCountry];
@@ -6915,7 +6953,7 @@ function syncHeroSmsFallbackSelectionOrderFromSelect(options = {}) {
       countrySelect.value || (
         isFiveSimProviderSelected()
           ? DEFAULT_FIVE_SIM_COUNTRY_ID
-          : (getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_SMSPOOL ? DEFAULT_SMSPOOL_COUNTRY_ID : DEFAULT_HERO_SMS_COUNTRY_ID)
+          : DEFAULT_HERO_SMS_COUNTRY_ID
       )
     );
     nextOrder = [defaultId];
@@ -7612,13 +7650,6 @@ async function loadHeroSmsCountries() {
         searchText: `${DEFAULT_HERO_SMS_COUNTRY_LABEL} ${DEFAULT_HERO_SMS_COUNTRY_ID}`,
       });
     }
-    if (!fallbackItems.some((item) => item.id === DEFAULT_SMSPOOL_COUNTRY_ID)) {
-      fallbackItems.unshift({
-        id: DEFAULT_SMSPOOL_COUNTRY_ID,
-        label: DEFAULT_SMSPOOL_COUNTRY_LABEL,
-        searchText: `${DEFAULT_SMSPOOL_COUNTRY_LABEL} ${DEFAULT_SMSPOOL_COUNTRY_ID} US +1`,
-      });
-    }
     applyOptions(fallbackItems, selectHeroSmsCountry);
     applyOptions(fallbackItems, selectHeroSmsCountryFallback);
     heroSmsCountrySearchTextById.clear();
@@ -8252,27 +8283,54 @@ async function loadSmsPoolCountries() {
       smsPoolCountrySearchTextById.set(id, entry.searchText || `${option.textContent} ${id}`);
     });
   };
+  const currentApiKey = String(inputSmsPoolApiKey?.value || latestState?.smsPoolApiKey || DEFAULT_SMS_POOL_API_KEY || '').trim();
+  const currentService = String(latestState?.smsPoolServiceId || DEFAULT_SMS_POOL_SERVICE_ID || '671').trim() || '671';
   const fallbackItems = [{
     id: DEFAULT_SMS_POOL_COUNTRY_ID,
     label: DEFAULT_SMS_POOL_COUNTRY_LABEL,
     searchText: `${DEFAULT_SMS_POOL_COUNTRY_LABEL} ${DEFAULT_SMS_POOL_COUNTRY_ID} 1`,
   }];
   try {
-    const response = await fetch('https://api.smspool.net/country/retrieve_all', {
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-    });
+    const response = currentApiKey
+      ? await fetch('https://api.smspool.net/request/suggested_countries', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          key: currentApiKey,
+          service: currentService,
+        }).toString(),
+      })
+      : await fetch('https://api.smspool.net/country/retrieve_all', {
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
     const payload = await response.json();
     const items = Array.isArray(payload)
       ? payload.map((entry) => ({
-        id: String(entry?.short_name || entry?.ID || '').trim().toUpperCase(),
+        id: String(entry?.short_name || entry?.ID || entry?.country_id || '').trim().toUpperCase(),
         label: String(entry?.name || entry?.short_name || '').trim(),
-        searchText: `${entry?.name || ''} ${entry?.short_name || ''} ${entry?.cc || ''} ${entry?.region || ''}`.trim(),
+        price: entry?.price !== undefined && entry?.price !== null ? String(entry.price).trim() : '',
+        pool: entry?.pool !== undefined && entry?.pool !== null ? String(entry.pool).trim() : '',
+        searchText: `${entry?.name || ''} ${entry?.short_name || ''} ${entry?.cc || ''} ${entry?.region || ''} ${entry?.price || ''} ${entry?.pool || ''}`.trim(),
       })).filter((entry) => entry.id && entry.label)
       : [];
+    items.forEach((entry) => {
+      const details = [
+        `[${entry.id}]`,
+        entry.price ? `$${entry.price}` : '',
+        entry.pool ? `pool ${entry.pool}` : '',
+      ].filter(Boolean).join(' ');
+      if (details && !String(entry.label || '').includes(details)) {
+        entry.label = `${entry.label} ${details}`;
+      }
+    });
     applyOptions(items.length ? items : fallbackItems);
   } catch (error) {
     console.warn('加载 SMSPool 国家列表失败：', error);
@@ -9262,19 +9320,19 @@ async function previewHeroSmsPriceTiers() {
       continue;
     }
     if (provider === smsPoolProviderValue) {
-      const selectedCountries = syncHeroSmsFallbackSelectionOrderFromSelect({
+      const selectedCountries = syncSmsPoolCountrySelectionOrderFromSelect({
         enforceMax: true,
         ensureDefault: false,
         showLimitToast: false,
       });
       const candidates = selectedCountries
         .map((country) => ({
-          id: normalizeHeroSmsCountryId(country?.id, 0),
-          label: normalizeHeroSmsCountryLabel(country?.label, ''),
+          id: String(country?.id || '').trim().toUpperCase(),
+          label: String(country?.label || '').trim(),
         }))
-        .filter((country) => country.id > 0);
+        .filter((country) => country.id);
       const apiKey = normalizeProvider(activeProvider) === smsPoolProviderValue
-        ? String(inputHeroSmsApiKey?.value || '').trim()
+        ? String(inputSmsPoolApiKey?.value || '').trim()
         : String(latestState?.smsPoolApiKey || '').trim();
       const priceRange = resolvePhoneSmsPricePreviewRange(smsPoolProviderValue);
       const smsPoolLines = ['SMSPool:'];
@@ -9294,35 +9352,45 @@ async function previewHeroSmsPriceTiers() {
         continue;
       }
       for (const country of candidates) {
-        const countryLabel = normalizeHeroSmsCountryLabel(country.label || getHeroSmsCountryLabelById(country.id), `Country #${country.id}`);
+        const countryLabel = String(country.label || getSmsPoolCountryLabelByCode(country.id) || country.id).trim();
         try {
-          const url = new URL('https://api.smspool.net/stubs/handler_api.php?setting=smspool');
-          url.searchParams.set('api_key', apiKey);
-          url.searchParams.set('action', 'getPrices');
-          url.searchParams.set('service', String(latestState?.smsPoolServiceCode || '671').trim() || '671');
-          url.searchParams.set('country', String(country.id));
-          const response = await fetch(url.toString(), { cache: 'no-store' });
-          const rawText = await response.text();
-          let payload = rawText;
-          try {
-            payload = rawText ? JSON.parse(rawText) : '';
-          } catch {
-            payload = rawText;
-          }
+          const response = await fetch('https://api.smspool.net/request/suggested_countries', {
+            method: 'POST',
+            cache: 'no-store',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              key: apiKey,
+              service: String(latestState?.smsPoolServiceId || latestState?.smsPoolServiceCode || '671').trim() || '671',
+            }).toString(),
+          });
+          const payload = await response.json().catch(() => []);
           if (!response.ok) {
             smsPoolLines.push(`${countryLabel}: ${summarizeHeroSmsPreviewError(payload, response.status)}`);
             continue;
           }
-          const tierEntries = collectPriceEntries(payload, [])
-            .filter((entry) => Number.isFinite(Number(entry.cost)) && Number(entry.cost) > 0)
-            .map((entry) => ({
-              price: Math.round(Number(entry.cost) * 10000) / 10000,
-              count: Number.isFinite(Number(entry.count)) ? Math.max(0, Math.floor(Number(entry.count))) : null,
-            }));
-          const prices = tierEntries
-            .filter((entry) => entry.count === null || entry.count > 0)
-            .map((entry) => entry.price);
-          const uniqueSorted = Array.from(new Set(prices)).sort((left, right) => left - right);
+          const records = Array.isArray(payload) ? payload : [];
+          const matchedRecords = records.filter((entry) => {
+            const shortName = String(entry?.short_name || '').trim().toUpperCase();
+            const numericId = String(entry?.country_id || entry?.ID || '').trim().toUpperCase();
+            return shortName === country.id || numericId === country.id;
+          });
+          const tierEntries = matchedRecords
+            .map((entry) => {
+              const numericPrice = Number(String(entry?.price || '').replace(/[$,\s]/g, ''));
+              if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+                return null;
+              }
+              return {
+                price: Math.round(numericPrice * 10000) / 10000,
+                count: null,
+                pool: String(entry?.pool || '').trim(),
+              };
+            })
+            .filter(Boolean);
+          const uniqueSorted = Array.from(new Set(tierEntries.map((entry) => entry.price))).sort((left, right) => left - right);
           const rangePrices = filterPhoneSmsPriceValuesForPreviewRange(uniqueSorted, priceRange);
           const filteredTierEntries = filterPhoneSmsPriceEntriesForPreviewRange(tierEntries, priceRange);
           if (!rangePrices.length) {
@@ -9331,8 +9399,9 @@ async function previewHeroSmsPriceTiers() {
           }
           const lowest = rangePrices[0];
           const tierText = formatPriceTiersForPreview(filteredTierEntries, { maxPrice: priceRange.maxPrice });
+          const pools = Array.from(new Set(matchedRecords.map((entry) => String(entry?.pool || '').trim()).filter(Boolean)));
           const lowestLabel = priceRange.hasMinPrice || priceRange.hasMaxPrice ? '区间内最低' : '最低';
-          smsPoolLines.push(`${countryLabel}: ${lowestLabel} ${lowest}${tierText ? `；档位：${tierText}` : ''}`);
+          smsPoolLines.push(`${countryLabel}: ${lowestLabel} ${lowest}${pools.length ? `；可用池：${pools.join('/')}` : ''}${tierText ? `；档位：${tierText}` : ''}`);
         } catch (error) {
           smsPoolLines.push(`${countryLabel}: 查询失败（${normalizeHeroSmsFetchErrorMessage(error)}）`);
         }
@@ -10259,12 +10328,9 @@ function updatePhoneVerificationSettingsUI() {
   const smsVerificationNumberProviderValue = typeof PHONE_SMS_PROVIDER_SMS_VERIFICATION_NUMBER !== 'undefined' ? PHONE_SMS_PROVIDER_SMS_VERIFICATION_NUMBER : 'sms-verification-number';
   const grizzlySmsProviderValue = typeof PHONE_SMS_PROVIDER_GRIZZLYSMS !== 'undefined' ? PHONE_SMS_PROVIDER_GRIZZLYSMS : 'grizzlysms';
   const chatGptApiProviderValue = typeof PHONE_SMS_PROVIDER_CHATGPT_API !== 'undefined' ? PHONE_SMS_PROVIDER_CHATGPT_API : 'chatgpt-api';
-  const providerOrderForDisplay = resolveNormalizedProviderOrderForRuntime(latestState || {});
-  const provider = providerOrderForDisplay[0] || (
-    typeof getSelectedPhoneSmsProvider === 'function'
-      ? getSelectedPhoneSmsProvider()
-      : normalizeProvider(selectPhoneSmsProvider?.value || latestState?.phoneSmsProvider || heroProviderValue)
-  );
+  const provider = typeof getSelectedPhoneSmsProvider === 'function'
+    ? getSelectedPhoneSmsProvider()
+    : normalizeProvider(selectPhoneSmsProvider?.value || latestState?.phoneSmsProvider || heroProviderValue);
   const smsPoolProvider = provider === smsPoolProviderValue;
   const heroProvider = provider === heroProviderValue;
   const fiveSimProvider = provider === fiveSimProviderValue;
@@ -10561,6 +10627,20 @@ function updatePlusModeUI() {
   if (typeof rowPlusMode !== 'undefined' && rowPlusMode) {
     rowPlusMode.style.display = supportsPlusMode ? '' : 'none';
   }
+  if (typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled) {
+    const locked = (typeof isAutoRunLockedPhase === 'function' && isAutoRunLockedPhase())
+      || (typeof isAutoRunScheduledPhase === 'function' && isAutoRunScheduledPhase())
+      || (typeof isAutoRunPausedPhase === 'function' && isAutoRunPausedPhase());
+    inputPlusModeEnabled.disabled = locked || !supportsPlusMode;
+    inputPlusModeEnabled.title = supportsPlusMode
+      ? '开启后使用 Plus Checkout 支付授权流程'
+      : '当前 flow 不支持 Plus 模式';
+  }
+  if (typeof plusModeCaption !== 'undefined' && plusModeCaption) {
+    plusModeCaption.textContent = enabled
+      ? '开启后使用 Plus Checkout 支付授权流程'
+      : '关闭后跳过 Plus Checkout 支付授权流程';
+  }
   if (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod) {
     selectPlusPaymentMethod.value = selectedMethod;
     if (selectPlusPaymentMethod.style) {
@@ -10607,7 +10687,9 @@ function updatePlusModeUI() {
     }
     row.style.display = enabled && selectedMethod === paypalValue ? '' : 'none';
   });
-  updatePlusCheckoutConversionModeUi();
+  if (typeof updatePlusCheckoutConversionModeUi === 'function') {
+    updatePlusCheckoutConversionModeUi();
+  }
   if (typeof rowHostedCheckoutSmsPool !== 'undefined' && rowHostedCheckoutSmsPool) {
     if (enabled && selectedMethod === paypalValue) {
       if (hostedSmsPoolExpanded && typeof queueHostedSmsPoolRefresh === 'function') {
@@ -11659,7 +11741,9 @@ function applySettingsState(state) {
   const fallbackIpProxyProtocol = 'http';
   const resolveIpProxyService = (value) => (typeof normalizeIpProxyService === 'function'
     ? normalizeIpProxyService(value)
-    : String(value || fallbackIpProxyService).trim().toLowerCase() || fallbackIpProxyService);
+    : (['711proxy', 'clash'].includes(String(value || '').trim().toLowerCase())
+      ? String(value || '').trim().toLowerCase()
+      : fallbackIpProxyService));
   const resolveIpProxyMode = (value) => {
     if (typeof normalizeIpProxyModeForCurrentRelease === 'function') {
       return normalizeIpProxyModeForCurrentRelease(value);
@@ -11713,7 +11797,7 @@ function applySettingsState(state) {
   }
   syncPasswordField(state || {});
   if (typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled) {
-    inputPlusModeEnabled.checked = FIXED_PLUS_MODE_ENABLED;
+    inputPlusModeEnabled.checked = Boolean(state?.plusModeEnabled);
   }
   if (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod) {
     selectPlusPaymentMethod.value = normalizePlusPaymentMethod(state?.plusPaymentMethod);
@@ -11964,6 +12048,9 @@ function applySettingsState(state) {
   if (selectIcloudForwardMailProvider) {
     selectIcloudForwardMailProvider.value = normalizeIcloudForwardMailProvider(state?.icloudForwardMailProvider);
   }
+  if (inputIcloudAliasLabelPattern) {
+    inputIcloudAliasLabelPattern.value = normalizeIcloudAliasLabelPattern(state?.icloudAliasLabelPattern);
+  }
   if (checkboxAutoDeleteIcloud) {
     checkboxAutoDeleteIcloud.checked = Boolean(state?.autoDeleteUsedIcloudAlias);
   }
@@ -11980,6 +12067,12 @@ function applySettingsState(state) {
     inputMail2925UseAccountPool.checked = Boolean(state?.mail2925UseAccountPool);
   }
   setManagedAliasBaseEmailInputForProvider(restoredMailProvider, state);
+  if (inputGmailAliasPattern) {
+    inputGmailAliasPattern.value = String(state?.gmailAliasPattern || '').trim();
+  }
+  if (inputGmailMailboxUrl) {
+    inputGmailMailboxUrl.value = String(state?.gmailMailboxUrl || '').trim();
+  }
   inputInbucketHost.value = state?.inbucketHost || '';
   inputInbucketMailbox.value = state?.inbucketMailbox || '';
   if (inputCustomMailProviderPool) {
@@ -11998,6 +12091,9 @@ function applySettingsState(state) {
   inputHotmailLocalBaseUrl.value = state?.hotmailLocalBaseUrl || '';
   if (typeof inputHotmailAliasEnabled !== 'undefined' && inputHotmailAliasEnabled) {
     inputHotmailAliasEnabled.checked = normalizeHotmailAliasEnabledValue(state?.hotmailAliasEnabled);
+  }
+  if (typeof inputOutlookAliasPattern !== 'undefined' && inputOutlookAliasPattern) {
+    inputOutlookAliasPattern.value = normalizeOutlookAliasPattern(state?.outlookAliasPattern);
   }
   if (typeof inputOutlookAliasMaxPerAccount !== 'undefined' && inputOutlookAliasMaxPerAccount) {
     inputOutlookAliasMaxPerAccount.value = String(
@@ -13527,6 +13623,9 @@ function updateMailProviderUI() {
   if (typeof rowIcloudForwardMailProvider !== 'undefined' && rowIcloudForwardMailProvider) {
     rowIcloudForwardMailProvider.style.display = showIcloudForwardMailProvider ? '' : 'none';
   }
+  if (typeof rowIcloudAliasLabelPattern !== 'undefined' && rowIcloudAliasLabelPattern) {
+    rowIcloudAliasLabelPattern.style.display = ((useEmailGenerator && useIcloud) || useIcloudProvider) ? '' : 'none';
+  }
   rowCfDomain.style.display = showCloudflareDomain ? '' : 'none';
   const { domains } = getCloudflareDomainsFromState();
   if (showCloudflareDomain) {
@@ -13573,6 +13672,12 @@ function updateMailProviderUI() {
   }
   inputEmailPrefix.style.display = '';
   inputEmailPrefix.readOnly = false;
+  if (rowGmailAliasPattern) {
+    rowGmailAliasPattern.style.display = useGmail && useGeneratedAlias ? '' : 'none';
+  }
+  if (rowGmailMailboxUrl) {
+    rowGmailMailboxUrl.style.display = useGmail ? '' : 'none';
+  }
   selectEmailGenerator.disabled = useHotmail
     || useLuckmail
     || useCustomEmail
@@ -13605,6 +13710,9 @@ function updateMailProviderUI() {
   }
   if (typeof rowOutlookAliasMax !== 'undefined' && rowOutlookAliasMax) {
     rowOutlookAliasMax.style.display = useHotmail && hotmailAliasEnabled ? '' : 'none';
+  }
+  if (typeof rowOutlookAliasPattern !== 'undefined' && rowOutlookAliasPattern) {
+    rowOutlookAliasPattern.style.display = useHotmail && hotmailAliasEnabled ? '' : 'none';
   }
   btnFetchEmail.hidden = useHotmail || useLuckmail || useCustomEmail || useCustomEmailPool;
   inputEmail.readOnly = useHotmail || useLuckmail;
@@ -17241,6 +17349,25 @@ inputEmailPrefix.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
+inputGmailAliasPattern?.addEventListener('input', () => {
+  syncLatestState({ gmailAliasPattern: inputGmailAliasPattern.value.trim() });
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputGmailAliasPattern?.addEventListener('blur', () => {
+  syncLatestState({ gmailAliasPattern: inputGmailAliasPattern.value.trim() });
+  saveSettings({ silent: true }).catch(() => { });
+});
+inputGmailMailboxUrl?.addEventListener('input', () => {
+  syncLatestState({ gmailMailboxUrl: inputGmailMailboxUrl.value.trim() });
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputGmailMailboxUrl?.addEventListener('blur', () => {
+  syncLatestState({ gmailMailboxUrl: inputGmailMailboxUrl.value.trim() });
+  saveSettings({ silent: true }).catch(() => { });
+});
+
 inputCustomEmailPool?.addEventListener('input', () => {
   syncRunCountFromConfiguredEmailPool();
   updateMailProviderUI();
@@ -17431,6 +17558,9 @@ inputSmsPoolApiKey?.addEventListener('input', () => {
   scheduleSettingsAutoSave();
 });
 inputSmsPoolApiKey?.addEventListener('blur', () => {
+  if (getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_SMSPOOL) {
+    loadSmsPoolCountries().catch(() => { });
+  }
   saveSettings({ silent: true }).catch(() => { });
 });
 inputSmsPoolService?.addEventListener('input', () => {
@@ -17440,6 +17570,9 @@ inputSmsPoolService?.addEventListener('input', () => {
 });
 inputSmsPoolService?.addEventListener('blur', () => {
   updateHeroSmsPlatformDisplay();
+  if (getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_SMSPOOL) {
+    loadSmsPoolCountries().catch(() => { });
+  }
   saveSettings({ silent: true }).catch(() => { });
 });
 inputSmsPoolPool?.addEventListener('input', () => {
@@ -18318,6 +18451,16 @@ inputOutlookAliasMaxPerAccount?.addEventListener('blur', () => {
   );
   saveSettings({ silent: true }).catch(() => { });
 });
+inputOutlookAliasPattern?.addEventListener('input', () => {
+  syncLatestState({ outlookAliasPattern: normalizeOutlookAliasPattern(inputOutlookAliasPattern.value) });
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputOutlookAliasPattern?.addEventListener('blur', () => {
+  inputOutlookAliasPattern.value = normalizeOutlookAliasPattern(inputOutlookAliasPattern.value);
+  syncLatestState({ outlookAliasPattern: inputOutlookAliasPattern.value });
+  saveSettings({ silent: true }).catch(() => { });
+});
 
 inputHotmailAliasEnabled?.addEventListener('change', () => {
   updateMailProviderUI();
@@ -18988,6 +19131,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         || message.payload.ipProxyAppliedHost !== undefined
         || message.payload.ipProxyAppliedPort !== undefined
         || message.payload.ipProxyAppliedRegion !== undefined
+        || message.payload.ipProxyAppliedClashNode !== undefined
         || message.payload.ipProxyAppliedHasAuth !== undefined
         || message.payload.ipProxyAppliedWarning !== undefined
         || message.payload.ipProxyAppliedExitIp !== undefined
@@ -19262,6 +19406,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           setManagedAliasBaseEmailInputForProvider('2925', latestState);
         }
       }
+      if (message.payload.gmailAliasPattern !== undefined && inputGmailAliasPattern) {
+        inputGmailAliasPattern.value = String(message.payload.gmailAliasPattern || '').trim();
+      }
+      if (message.payload.gmailMailboxUrl !== undefined && inputGmailMailboxUrl) {
+        inputGmailMailboxUrl.value = String(message.payload.gmailMailboxUrl || '').trim();
+      }
+      if (message.payload.gmailBaseEmail !== undefined && selectMailProvider.value === GMAIL_PROVIDER) {
+        setManagedAliasBaseEmailInputForProvider(GMAIL_PROVIDER, latestState);
+      }
       if (message.payload.customEmailPoolEntries !== undefined || message.payload.customEmailPool !== undefined) {
         setCustomEmailPoolEntriesState(restoreCustomEmailPoolEntriesFromState({
           ...latestState,
@@ -19313,6 +19466,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message.payload.icloudFetchMode !== undefined && selectIcloudFetchMode) {
         selectIcloudFetchMode.value = normalizeIcloudFetchMode(message.payload.icloudFetchMode);
+      }
+      if (message.payload.icloudAliasLabelPattern !== undefined && inputIcloudAliasLabelPattern) {
+        inputIcloudAliasLabelPattern.value = normalizeIcloudAliasLabelPattern(message.payload.icloudAliasLabelPattern);
       }
       if (message.payload.autoRunSkipFailures !== undefined) {
         inputAutoSkipFailures.checked = Boolean(message.payload.autoRunSkipFailures);
@@ -19431,6 +19587,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.hotmailAliasEnabled !== undefined && inputHotmailAliasEnabled) {
         inputHotmailAliasEnabled.checked = Boolean(message.payload.hotmailAliasEnabled);
         updateMailProviderUI();
+      }
+      if (message.payload.outlookAliasPattern !== undefined && inputOutlookAliasPattern) {
+        inputOutlookAliasPattern.value = normalizeOutlookAliasPattern(message.payload.outlookAliasPattern);
       }
       if (message.payload.outlookAliasMaxPerAccount !== undefined && inputOutlookAliasMaxPerAccount) {
         inputOutlookAliasMaxPerAccount.value = String(

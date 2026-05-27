@@ -62,6 +62,11 @@
     return String(Math.round(numeric * 10000) / 10000);
   }
 
+  function normalizeSmsPoolSuggestedPrice(value = '') {
+    const price = normalizeSmsPoolCost(value);
+    return price === null ? '' : String(price);
+  }
+
   function normalizeSmsPoolCost(value = '') {
     if (value === undefined || value === null || value === '') {
       return null;
@@ -421,16 +426,65 @@
   }
 
   async function fetchCountries(_state = {}, deps = {}) {
-    const config = resolveConfig({}, deps);
-    const payload = await fetchPayload(config, '/country/retrieve_all', null, 'SMSPool 国家列表');
+    const config = resolveConfig(_state, deps);
+    const service = normalizeSmsPoolServiceId(_state.smsPoolServiceId, DEFAULT_SERVICE_ID);
+    let payload = [];
+    if (config.apiKey) {
+      payload = await fetchPayload(
+        config,
+        '/request/suggested_countries',
+        { key: config.apiKey, service },
+        'SMSPool 可用国家列表'
+      );
+    }
+    if (!Array.isArray(payload) || !payload.length) {
+      payload = await fetchPayload(config, '/country/retrieve_all', null, 'SMSPool 国家列表');
+    }
     if (!Array.isArray(payload)) {
       return [];
     }
     return payload.map((entry) => ({
-      id: normalizeSmsPoolCountryId(entry?.short_name || entry?.ID, ''),
+      id: normalizeSmsPoolCountryId(entry?.short_name || entry?.ID || entry?.country_id, ''),
       label: normalizeSmsPoolCountryLabel(entry?.name, entry?.short_name || ''),
-      searchText: `${entry?.name || ''} ${entry?.short_name || ''} ${entry?.cc || ''} ${entry?.region || ''}`.trim(),
+      countryNumericId: entry?.country_id ?? entry?.ID,
+      poolId: normalizeSmsPoolPoolId(entry?.pool, ''),
+      price: normalizeSmsPoolSuggestedPrice(entry?.price),
+      searchText: `${entry?.name || ''} ${entry?.short_name || ''} ${entry?.cc || ''} ${entry?.region || ''} ${entry?.price || ''} ${entry?.pool || ''}`.trim(),
     })).filter((entry) => entry.id && entry.label);
+  }
+
+  async function fetchSuggestedCountryMap(state = {}, deps = {}) {
+    const config = resolveConfig(state, deps);
+    if (!config.apiKey) {
+      return new Map();
+    }
+    const service = normalizeSmsPoolServiceId(state.smsPoolServiceId, DEFAULT_SERVICE_ID);
+    try {
+      const payload = await fetchPayload(
+        config,
+        '/request/suggested_countries',
+        { key: config.apiKey, service },
+        'SMSPool 可用国家列表'
+      );
+      const records = Array.isArray(payload) ? payload : [];
+      const result = new Map();
+      records.forEach((entry) => {
+        const id = normalizeSmsPoolCountryId(entry?.short_name || entry?.country_id || entry?.ID, '');
+        if (!id) {
+          return;
+        }
+        result.set(id, {
+          id,
+          label: normalizeSmsPoolCountryLabel(entry?.name, id),
+          countryNumericId: entry?.country_id ?? entry?.ID,
+          poolId: normalizeSmsPoolPoolId(entry?.pool, ''),
+          price: normalizeSmsPoolSuggestedPrice(entry?.price),
+        });
+      });
+      return result;
+    } catch {
+      return new Map();
+    }
   }
 
   async function fetchPrices(state = {}, countryConfig = resolveCountryConfig(state), deps = {}) {
@@ -467,15 +521,26 @@
       throw new Error('SMSPool 未选择国家，请先在接码设置中至少选择 1 个国家。');
     }
     const serviceId = normalizeSmsPoolServiceId(state.smsPoolServiceId, DEFAULT_SERVICE_ID);
-    const poolId = normalizeSmsPoolPoolId(state.smsPoolPoolId, DEFAULT_POOL_ID);
+    const configuredPoolId = normalizeSmsPoolPoolId(state.smsPoolPoolId, DEFAULT_POOL_ID);
+    const shouldAutoUseSuggestedPool = configuredPoolId === DEFAULT_POOL_ID;
     const maxPrice = normalizeSmsPoolPrice(state.smsPoolMaxPrice);
+    const shouldFetchSuggestedPools = shouldAutoUseSuggestedPool
+      && effectiveCandidates.some((entry) => normalizeSmsPoolCountryId(entry?.id, DEFAULT_COUNTRY_ID) !== DEFAULT_COUNTRY_ID);
+    const suggestedByCountryId = shouldFetchSuggestedPools
+      ? await fetchSuggestedCountryMap(state, deps)
+      : new Map();
     let lastError = null;
     const failures = [];
     for (const countryConfig of effectiveCandidates) {
       try {
+        const countryId = normalizeSmsPoolCountryId(countryConfig.id, DEFAULT_COUNTRY_ID);
+        const suggested = suggestedByCountryId.get(countryId);
+        const poolId = shouldAutoUseSuggestedPool && suggested?.poolId
+          ? suggested.poolId
+          : configuredPoolId;
         const body = {
           key: config.apiKey,
-          country: normalizeSmsPoolCountryId(countryConfig.id, DEFAULT_COUNTRY_ID),
+          country: countryId,
           service: serviceId,
           pool: poolId,
         };
@@ -489,8 +554,8 @@
           throw error;
         }
         const activation = normalizeActivation(payload, {
-          countryId: countryConfig.id,
-          countryLabel: countryConfig.label,
+          countryId,
+          countryLabel: suggested?.label || countryConfig.label,
           serviceCode: serviceId,
           maxUses: 3,
         });

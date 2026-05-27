@@ -407,6 +407,83 @@ test('generated email helper respects runtime generator overrides when deciding 
   assert.equal(aliasStates[0].gmailBaseEmail, 'base@gmail.com');
 });
 
+test('generated email helper forwards gmail alias pattern and advances counter after save', async () => {
+  const api = loadGeneratedEmailHelpersApi();
+  const aliasStates = [];
+  const events = [];
+
+  const helpers = api.createGeneratedEmailHelpers({
+    addLog: async () => {},
+    buildGeneratedAliasEmail: (state) => {
+      aliasStates.push({ ...state });
+      return 'base+subtoken007@gmail.com';
+    },
+    buildCloudflareTempEmailHeaders: () => ({}),
+    CLOUDFLARE_TEMP_EMAIL_GENERATOR: 'cloudflare-temp-email',
+    CUSTOM_EMAIL_POOL_GENERATOR: 'custom-pool',
+    DUCK_AUTOFILL_URL: 'https://duckduckgo.com/email',
+    fetch: async () => ({ ok: true, text: async () => '{}' }),
+    fetchIcloudHideMyEmail: async () => {
+      throw new Error('should not use icloud generator');
+    },
+    getCloudflareTempEmailAddressFromResponse: () => '',
+    getCloudflareTempEmailConfig: () => ({ baseUrl: '', adminAuth: '', domain: '' }),
+    getState: async () => ({
+      mailProvider: 'gmail',
+      emailGenerator: 'gmail-alias',
+      gmailBaseEmail: 'base@gmail.com',
+      gmailAliasPattern: 'old{auto}',
+      gmailAliasNextNumber: 7,
+    }),
+    ensureMail2925AccountForFlow: async () => {
+      throw new Error('should not allocate mail2925 account');
+    },
+    joinCloudflareTempEmailUrl: () => '',
+    normalizeCloudflareDomain: () => '',
+    normalizeCloudflareTempEmailAddress: () => '',
+    normalizeEmailGenerator: (value) => String(value || '').trim().toLowerCase(),
+    isGeneratedAliasProvider: (stateOrProvider) => {
+      const provider = typeof stateOrProvider === 'string'
+        ? stateOrProvider
+        : stateOrProvider?.mailProvider;
+      return String(provider || '').trim().toLowerCase() === 'gmail';
+    },
+    persistRegistrationEmailState: async (_state, email) => {
+      events.push(['email', email]);
+    },
+    reuseOrCreateTab: async () => {},
+    sendToContentScript: async () => {
+      throw new Error('should not use duck generator');
+    },
+    setEmailState: async () => {
+      throw new Error('should use persistRegistrationEmailState');
+    },
+    setPersistentSettings: async (patch) => {
+      events.push(['persistent', patch]);
+    },
+    setState: async (patch) => {
+      events.push(['state', patch]);
+    },
+    throwIfStopped: () => {},
+    getNextGmailAliasNumberAfterGeneration: (state) => Number(state.gmailAliasNextNumber) + 1,
+  });
+
+  const email = await helpers.fetchGeneratedEmail(null, {
+    generator: 'gmail-alias',
+    mailProvider: 'gmail',
+    gmailAliasPattern: 'subtoken{auto}',
+  });
+
+  assert.equal(email, 'base+subtoken007@gmail.com');
+  assert.equal(aliasStates[0].gmailAliasPattern, 'subtoken{auto}');
+  assert.equal(aliasStates[0].gmailAliasNextNumber, 7);
+  assert.deepEqual(events, [
+    ['email', 'base+subtoken007@gmail.com'],
+    ['persistent', { gmailAliasNextNumber: 8 }],
+    ['state', { gmailAliasNextNumber: 8 }],
+  ]);
+});
+
 test('generated email helper uses the regular temp email domain when random subdomain mode is disabled', async () => {
   const api = loadGeneratedEmailHelpersApi();
   const requests = [];
@@ -582,6 +659,7 @@ test('generated email helper honors iCloud always-new fetch mode', async () => {
     getCloudflareTempEmailConfig: () => ({ baseUrl: '', adminAuth: '', domain: '' }),
     getState: async () => ({
       emailGenerator: 'icloud',
+      icloudAliasLabelPattern: 'Apple Flow {date}',
       icloudFetchMode: 'always_new',
       mailProvider: 'gmail',
     }),
@@ -603,6 +681,7 @@ test('generated email helper honors iCloud always-new fetch mode', async () => {
 
   const email = await helpers.fetchGeneratedEmail({
     emailGenerator: 'icloud',
+    icloudAliasLabelPattern: 'Apple Flow {date}',
     icloudFetchMode: 'always_new',
     mailProvider: 'gmail',
   }, {
@@ -615,6 +694,7 @@ test('generated email helper honors iCloud always-new fetch mode', async () => {
   assert.equal(icloudOptions[0].preserveAccountIdentity, false);
   assert.equal(icloudOptions[0].source, 'generated:icloud');
   assert.equal(icloudOptions[0].state.emailGenerator, 'icloud');
+  assert.equal(icloudOptions[0].state.icloudAliasLabelPattern, 'Apple Flow {date}');
 });
 
 test('generated email helper forwards preserve identity context to the iCloud generator', async () => {
